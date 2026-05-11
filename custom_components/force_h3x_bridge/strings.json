@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Force H3X Bridge",
+        "description": "Enter the Modbus TCP connection details of your inverter.",
+        "data": {
+          "host": "Host (IP Address)",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the inverter.",
+      "unknown": "Unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "Device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update Force H3X Bridge connection",
+        "description": "Update the Modbus TCP IP address and port. The integration reloads after saving.",
+        "data": {
+          "host": "Host (IP Address)",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Invalid inverter address.",
+      "unknown": "Unexpected error occurred."
+    }
+  }
+}
