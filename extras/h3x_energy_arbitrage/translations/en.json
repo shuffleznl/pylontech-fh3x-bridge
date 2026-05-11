@@ -113,6 +113,21 @@
       "first_slot_value": {
         "name": "First slot value"
       },
+      "estimated_savings": {
+        "name": "Estimated savings"
+      },
+      "estimated_savings_today": {
+        "name": "Estimated savings today"
+      },
+      "planned_charge_energy": {
+        "name": "Planned charge energy"
+      },
+      "planned_discharge_energy": {
+        "name": "Planned discharge energy"
+      },
+      "price_plan": {
+        "name": "Price plan"
+      },
       "resolution_minutes": {
         "name": "Price resolution"
       },

@@ -93,6 +93,10 @@ class Decision:
     next_slot_start: str | None = None
     next_slot_end: str | None = None
     estimated_first_slot_value: float = 0.0
+    estimated_plan_value: float = 0.0
+    estimated_today_value: float = 0.0
+    planned_charge_kwh: float = 0.0
+    planned_discharge_kwh: float = 0.0
     applied: bool = False
     apply_error: str | None = None
     updated_at: str = field(default_factory=lambda: dt_util.utcnow().isoformat())
@@ -104,6 +108,10 @@ class Decision:
         data["target_power_w"] = round(self.target_power_w, 1)
         data["target_power_percent"] = round(self.target_power_percent, 1)
         data["estimated_first_slot_value"] = round(self.estimated_first_slot_value, 4)
+        data["estimated_plan_value"] = round(self.estimated_plan_value, 4)
+        data["estimated_today_value"] = round(self.estimated_today_value, 4)
+        data["planned_charge_kwh"] = round(self.planned_charge_kwh, 3)
+        data["planned_discharge_kwh"] = round(self.planned_discharge_kwh, 3)
         return data
 
 
@@ -298,6 +306,20 @@ class H3XArbitrageCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "temperature_guard": temp_reason,
                 "control_enabled": bool(self._option(CONF_CONTROL_ENABLED)),
                 "nordpool_resolution_minutes": int(self._option(CONF_RESOLUTION)),
+                "price_slots": [
+                    self._serialize_price_slot(slot) for slot in future_slots
+                ],
+                "today_slots": [
+                    self._serialize_price_slot(slot)
+                    for slot in future_slots
+                    if dt_util.as_local(slot.start).date() == dt_util.now().date()
+                ],
+                "tomorrow_slots": [
+                    self._serialize_price_slot(slot)
+                    for slot in future_slots
+                    if dt_util.as_local(slot.start).date()
+                    == dt_util.now().date() + timedelta(days=1)
+                ],
             }
         )
 
@@ -402,6 +424,23 @@ class H3XArbitrageCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             values = next_values
 
+        plan_value = values.get(initial_idx, 0.0)
+        plan_slots, planned_charge_kwh, planned_discharge_kwh, today_value = (
+            self._build_plan_summary(
+                future_slots=future_slots,
+                policy=policy,
+                levels=levels,
+                initial_idx=initial_idx,
+                step_kwh=step_kwh,
+                charge_eff=charge_eff,
+                discharge_eff=discharge_eff,
+                buy_adder=buy_adder,
+                sell_adder=sell_adder,
+                required_margin=required_margin,
+                now=now,
+            )
+        )
+
         next_idx = policy.get((0, initial_idx), initial_idx)
         delta = levels[next_idx] - levels[initial_idx]
         duration_h = self._slot_duration_hours(future_slots[0], now)
@@ -410,6 +449,11 @@ class H3XArbitrageCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 action="idle",
                 reason="optimizer selected no economic movement",
                 estimated_first_slot_value=first_rewards.get((0, initial_idx), 0.0),
+                estimated_plan_value=plan_value,
+                estimated_today_value=today_value,
+                planned_charge_kwh=planned_charge_kwh,
+                planned_discharge_kwh=planned_discharge_kwh,
+                attributes={"dispatch_plan": plan_slots},
             )
 
         if delta > 0:
@@ -419,6 +463,11 @@ class H3XArbitrageCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 reason="current slot is economical for grid charging",
                 target_power_w=min(target_power, self._slot_power_limit(future_slots[0], future_slots)),
                 estimated_first_slot_value=first_rewards.get((0, initial_idx), 0.0),
+                estimated_plan_value=plan_value,
+                estimated_today_value=today_value,
+                planned_charge_kwh=planned_charge_kwh,
+                planned_discharge_kwh=planned_discharge_kwh,
+                attributes={"dispatch_plan": plan_slots},
             )
 
         target_power = abs(delta) * discharge_eff / duration_h * 1000
@@ -427,7 +476,77 @@ class H3XArbitrageCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             reason="current slot is economical for grid export",
             target_power_w=min(target_power, self._slot_power_limit(future_slots[0], future_slots)),
             estimated_first_slot_value=first_rewards.get((0, initial_idx), 0.0),
+            estimated_plan_value=plan_value,
+            estimated_today_value=today_value,
+            planned_charge_kwh=planned_charge_kwh,
+            planned_discharge_kwh=planned_discharge_kwh,
+            attributes={"dispatch_plan": plan_slots},
         )
+
+    def _build_plan_summary(
+        self,
+        future_slots: list[PriceSlot],
+        policy: dict[tuple[int, int], int],
+        levels: list[float],
+        initial_idx: int,
+        step_kwh: float,
+        charge_eff: float,
+        discharge_eff: float,
+        buy_adder: float,
+        sell_adder: float,
+        required_margin: float,
+        now: datetime,
+    ) -> tuple[list[dict[str, Any]], float, float, float]:
+        """Reconstruct the selected dispatch path for dashboard diagnostics."""
+        local_today = dt_util.now().date()
+        idx = initial_idx
+        plan_slots: list[dict[str, Any]] = []
+        planned_charge_kwh = 0.0
+        planned_discharge_kwh = 0.0
+        today_value = 0.0
+
+        for slot_index, slot in enumerate(future_slots):
+            next_idx = policy.get((slot_index, idx), idx)
+            delta = levels[next_idx] - levels[idx]
+            duration_h = self._slot_duration_hours(
+                slot, now if slot_index == 0 else None
+            )
+            action = "idle"
+            target_power_w = 0.0
+            grid_energy_kwh = 0.0
+            value = 0.0
+
+            if abs(delta) >= step_kwh / 2 and duration_h > 0:
+                if delta > 0:
+                    action = "charge"
+                    grid_energy_kwh = delta / charge_eff
+                    target_power_w = grid_energy_kwh / duration_h * 1000
+                    planned_charge_kwh += grid_energy_kwh
+                    value = -grid_energy_kwh * (slot.price + buy_adder)
+                else:
+                    action = "discharge"
+                    grid_energy_kwh = abs(delta) * discharge_eff
+                    target_power_w = grid_energy_kwh / duration_h * 1000
+                    planned_discharge_kwh += grid_energy_kwh
+                    value = grid_energy_kwh * (
+                        slot.price - sell_adder - required_margin
+                    )
+
+            if dt_util.as_local(slot.start).date() == local_today:
+                today_value += value
+
+            plan_slots.append(
+                {
+                    **self._serialize_price_slot(slot),
+                    "action": action,
+                    "target_power_w": round(target_power_w, 1),
+                    "energy_kwh": round(grid_energy_kwh, 3),
+                    "value": round(value, 4),
+                }
+            )
+            idx = next_idx
+
+        return plan_slots, planned_charge_kwh, planned_discharge_kwh, today_value
 
     def _terminal_energy(
         self, current_energy: float, min_energy: float, max_energy: float
@@ -512,6 +631,14 @@ class H3XArbitrageCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not slots:
             return None
         return int(round(slots[0].duration_hours * 60))
+
+    def _serialize_price_slot(self, slot: PriceSlot) -> dict[str, Any]:
+        """Serialize a price slot using local wall-clock timestamps."""
+        return {
+            "start": dt_util.as_local(slot.start).isoformat(),
+            "end": dt_util.as_local(slot.end).isoformat(),
+            "price": round(slot.price, 5),
+        }
 
     def _state_float(self, entity_id: str | None) -> float | None:
         """Read a Home Assistant entity as a float."""

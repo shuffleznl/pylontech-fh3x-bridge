@@ -12,7 +12,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfPower
+from homeassistant.const import UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -46,12 +46,31 @@ def _decision_attributes(data: dict[str, Any]) -> dict[str, Any]:
             "next_slot_start": data.get("next_slot_start"),
             "next_slot_end": data.get("next_slot_end"),
             "estimated_first_slot_value": data.get("estimated_first_slot_value"),
+            "estimated_plan_value": data.get("estimated_plan_value"),
+            "estimated_today_value": data.get("estimated_today_value"),
+            "planned_charge_kwh": data.get("planned_charge_kwh"),
+            "planned_discharge_kwh": data.get("planned_discharge_kwh"),
             "applied": data.get("applied"),
             "apply_error": data.get("apply_error"),
             "updated_at": data.get("updated_at"),
         }
     )
     return attributes
+
+
+def _price_plan_attributes(data: dict[str, Any]) -> dict[str, Any]:
+    """Return price and dispatch arrays for dashboard charts."""
+    attributes = dict(data.get("attributes") or {})
+    return {
+        "area": attributes.get("area"),
+        "currency": attributes.get("currency"),
+        "resolution_minutes": data.get("resolution_minutes"),
+        "updated_at": data.get("updated_at"),
+        "price_slots": attributes.get("price_slots", []),
+        "today_slots": attributes.get("today_slots", []),
+        "tomorrow_slots": attributes.get("tomorrow_slots", []),
+        "dispatch_plan": attributes.get("dispatch_plan", []),
+    }
 
 
 SENSORS: tuple[H3XArbitrageSensorDescription, ...] = (
@@ -95,6 +114,54 @@ SENSORS: tuple[H3XArbitrageSensorDescription, ...] = (
         native_unit_of_measurement="currency",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: data.get("estimated_first_slot_value"),
+    ),
+    H3XArbitrageSensorDescription(
+        key="estimated_savings",
+        translation_key="estimated_savings",
+        name="Estimated savings",
+        native_unit_of_measurement="currency",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:cash-multiple",
+        value_fn=lambda data: data.get("estimated_plan_value"),
+    ),
+    H3XArbitrageSensorDescription(
+        key="estimated_savings_today",
+        translation_key="estimated_savings_today",
+        name="Estimated savings today",
+        native_unit_of_measurement="currency",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:cash-clock",
+        value_fn=lambda data: data.get("estimated_today_value"),
+    ),
+    H3XArbitrageSensorDescription(
+        key="planned_charge_energy",
+        translation_key="planned_charge_energy",
+        name="Planned charge energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-plus",
+        value_fn=lambda data: data.get("planned_charge_kwh"),
+    ),
+    H3XArbitrageSensorDescription(
+        key="planned_discharge_energy",
+        translation_key="planned_discharge_energy",
+        name="Planned discharge energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-minus",
+        value_fn=lambda data: data.get("planned_discharge_kwh"),
+    ),
+    H3XArbitrageSensorDescription(
+        key="price_plan",
+        translation_key="price_plan",
+        name="Price plan",
+        native_unit_of_measurement="currency/kWh",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:chart-timeline-variant",
+        value_fn=lambda data: data.get("current_price"),
+        extra_fn=_price_plan_attributes,
     ),
     H3XArbitrageSensorDescription(
         key="resolution_minutes",

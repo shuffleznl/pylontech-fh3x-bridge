@@ -34,6 +34,18 @@ The H3X integration writes Modbus register `40907` for EMS mode and `40901` for 
 4. Go to **Settings > Devices & services > Add integration**.
 5. Add **Force H3X Bridge** and enter the Modbus TCP IP/port.
 
+## Optional Energy Dashboard
+
+A Lovelace dashboard is provided in:
+
+```text
+dashboards/force-h3x-energy.yaml
+```
+
+It shows dynamic prices, current arbitrage decisions, planned charge/discharge slots, estimated value, battery power, and battery SOC. See [dashboards/README.md](dashboards/README.md) for installation.
+
+The price and decision cards require the optional `extras/h3x_energy_arbitrage` integration. The rich charts use `apexcharts-card` from HACS; built-in history cards are included for battery power and SOC.
+
 ## Manual Installation
 
 1. Copy `custom_components/force_h3x_bridge` into your Home Assistant `config/custom_components/` directory.
