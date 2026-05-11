@@ -8,7 +8,7 @@ custom_components/force_h3x_bridge/
 
 It is based on `wietse108/HA-pylontech-force-H3X`, but uses its own domain (`force_h3x_bridge`) so it can be installed without conflicting with the original integration. The patch changes the Modbus write path for the manufacturer-documented EMS control registers.
 
-Repository metadata points to `https://github.com/shufflez/force-h3x-bridge`; code ownership is set to `@shufflez` and `@openai`.
+Repository metadata points to `https://github.com/shuffleznl/force-h3x-bridge`; code ownership is set to `@shufflez`, `@shuffleznl`, and `@openai`.
 
 ## Manufacturer Register Findings
 

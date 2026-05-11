@@ -1,12 +1,12 @@
 {
   "domain": "force_h3x_bridge",
   "name": "Force H3X Bridge",
-  "codeowners": ["@shufflez", "@openai"],
+  "codeowners": ["@shufflez", "@shuffleznl", "@openai"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/shufflez/force-h3x-bridge",
+  "documentation": "https://github.com/shuffleznl/force-h3x-bridge",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/shufflez/force-h3x-bridge/issues",
+  "issue_tracker": "https://github.com/shuffleznl/force-h3x-bridge/issues",
   "requirements": ["pymodbus>=3.11.2"],
   "version": "0.1.0"
 }
