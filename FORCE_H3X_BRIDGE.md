@@ -53,7 +53,7 @@ custom_components/force_h3x_bridge
 
 Then restart Home Assistant.
 
-Because the domain is different, this integration can be installed next to the upstream `pylon_fh3x` integration. Avoid controlling the inverter from both at the same time.
+Because the domain is different, this integration can be installed next to the upstream `pylon_fh3x` integration at the Home Assistant filesystem level. For a live inverter, keep only one of them enabled per H3X. Concurrent polling/control sessions can leave stale Modbus TCP frames on the socket and trigger transaction-ID mismatch errors in PyModbus.
 
 After restart:
 

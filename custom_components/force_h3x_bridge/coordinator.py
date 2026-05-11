@@ -86,9 +86,10 @@ class PylontechCoordinator(DataUpdateCoordinator):
     """Class to manage fetching Modbus data from the inverter."""
 
     def __init__(self, hass: HomeAssistant, host: str, port: int) -> None:
-        self.client = AsyncModbusTcpClient(host=host, port=port, timeout=5)
         self.host = host
         self.port = port
+        self.client = self._new_client()
+        self._modbus_lock = asyncio.Lock()
         
         super().__init__(
             hass,
@@ -96,6 +97,36 @@ class PylontechCoordinator(DataUpdateCoordinator):
             name=DOMAIN,
             update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
         )
+
+    def _new_client(self) -> AsyncModbusTcpClient:
+        """Create a fresh Modbus TCP client."""
+        return AsyncModbusTcpClient(
+            host=self.host,
+            port=self.port,
+            timeout=5,
+            retries=1,
+            reconnect_delay=0.5,
+            reconnect_delay_max=5,
+        )
+
+    async def _ensure_connected(self) -> None:
+        """Ensure the Modbus TCP client is connected."""
+        if self.client.connected:
+            return
+        if not await self.client.connect():
+            raise ModbusException(f"Failed to connect to {self.host}:{self.port}")
+
+    def _reset_client(self) -> None:
+        """Close and recreate the Modbus client after protocol desync/errors."""
+        try:
+            self.client.close()
+        finally:
+            self.client = self._new_client()
+
+    async def async_close(self) -> None:
+        """Close the Modbus client safely."""
+        async with self._modbus_lock:
+            self.client.close()
 
     async def safe_read(self, address, count, slave):
         
@@ -108,10 +139,14 @@ class PylontechCoordinator(DataUpdateCoordinator):
         return res.registers
 
     async def _async_update_data(self):
+        """Fetch data from the inverter via Modbus with serialized access."""
+        async with self._modbus_lock:
+            return await self._async_update_data_locked()
+
+    async def _async_update_data_locked(self):
         """Fetch data from the inverter via Modbus."""
         try:
-            if not self.client.connected:
-                await self.client.connect()
+            await self._ensure_connected()
 
             data = {}
 
@@ -294,8 +329,10 @@ class PylontechCoordinator(DataUpdateCoordinator):
             return data
 
         except ModbusException as err:
+            self._reset_client()
             raise UpdateFailed(f"error with modbus communication: {err}")
         except Exception as err:
+            self._reset_client()
             raise UpdateFailed(f"unexpected error: {err}")
 
     async def async_write_register(
@@ -304,6 +341,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
         value: int,
         slave: int = 2,
         signed: bool = False,
+        refresh: bool = True,
     ) -> bool:
         """Write one 16-bit register.
 
@@ -311,16 +349,16 @@ class PylontechCoordinator(DataUpdateCoordinator):
         negative charges. pymodbus writes a Modbus register word, so signed
         values are encoded explicitly as two's-complement U16 words.
         """
+        success = False
         try:
-            if not self.client.connected:
-                await self.client.connect()
-
             register_value = (
                 encode_16bit_int(value) if signed else encode_16bit_uint(value)
             )
-            res = await _modbus_write_register(
-                self.client, address, register_value, slave
-            )
+            async with self._modbus_lock:
+                await self._ensure_connected()
+                res = await _modbus_write_register(
+                    self.client, address, register_value, slave
+                )
 
             if res.isError():
                 _LOGGER.error(
@@ -333,37 +371,59 @@ class PylontechCoordinator(DataUpdateCoordinator):
                 )
                 return False
 
-            await self.async_request_refresh()
-            return True
+            success = True
 
         except ValueError as err:
             _LOGGER.error("Invalid value for register %s: %s", address, err)
             return False
+        except ModbusException as err:
+            self._reset_client()
+            _LOGGER.error("Modbus error while writing register %s: %s", address, err)
+            return False
         except Exception as err:
+            self._reset_client()
             _LOGGER.error("Unexpected error while writing register %s: %s", address, err)
             return False
-        
-    async def async_write_register_32bit(self, address: int, value: int, slave: int = 2) -> bool:
-        """Write a 32-bit signed value (S32) as two consecutive 16-bit registers."""
-        try:
-            if not self.client.connected:
-                await self.client.connect()
 
+        if success and refresh:
+            await self.async_request_refresh()
+        return success
+        
+    async def async_write_register_32bit(
+        self,
+        address: int,
+        value: int,
+        slave: int = 2,
+        refresh: bool = True,
+    ) -> bool:
+        """Write a 32-bit signed value (S32) as two consecutive 16-bit registers."""
+        success = False
+        try:
             # Pack S32 into two U16 registers (big-endian)
             packed = struct.pack('>i', value)
             high, low = struct.unpack('>HH', packed)
 
-            res = await _modbus_write_registers(
-                self.client, address, [high, low], slave
-            )
+            async with self._modbus_lock:
+                await self._ensure_connected()
+                res = await _modbus_write_registers(
+                    self.client, address, [high, low], slave
+                )
 
             if res.isError():
                 _LOGGER.error("Error writing 32-bit register %s: %s", address, res)
                 return False
 
-            await self.async_request_refresh()
-            return True
+            success = True
 
+        except ModbusException as err:
+            self._reset_client()
+            _LOGGER.error("Modbus error while writing 32-bit register: %s", err)
+            return False
         except Exception as err:
+            self._reset_client()
             _LOGGER.error("Unexpected error writing 32-bit register: %s", err)
             return False
+
+        if success and refresh:
+            await self.async_request_refresh()
+        return success

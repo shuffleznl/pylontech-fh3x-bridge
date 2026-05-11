@@ -147,6 +147,7 @@ class PylontechNumber(CoordinatorEntity, NumberEntity):
                 address=40907,
                 value=EMS_MODE_USER,
                 slave=self.entity_description.slave_id,
+                refresh=False,
             )
             if not mode_success:
                 return
