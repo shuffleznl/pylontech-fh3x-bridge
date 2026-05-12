@@ -37,11 +37,15 @@ The document also states the device only supports Modbus TCP, default external L
 
    The manufacturer document says register `40901` must be set when EMS mode is active. In practice this makes direct UI/service calls to the number entity work without requiring a separate automation step.
 
-4. The integration now has an options flow for updating Modbus TCP host and port.
+4. Successful writes reconnect the Modbus TCP socket and skip immediate forced refreshes.
+
+   Live H3X logs showed duplicate write responses arriving after the acknowledged write. Reconnecting discards stale frames, and the next scheduled poll confirms the final device state.
+
+5. The integration now has an options flow for updating Modbus TCP host and port.
 
    Go to **Settings > Devices & services > Force H3X Bridge > Configure** to change IP/port. The integration reloads after saving.
 
-5. The default setup IP is now the manufacturer documented default `172.22.184.210`; default port remains `502`.
+6. The default setup IP is now the manufacturer documented default `172.22.184.210`; default port remains `502`.
 
 ## Deployment
 

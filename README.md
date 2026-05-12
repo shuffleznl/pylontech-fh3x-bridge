@@ -57,6 +57,7 @@ The price and decision cards require the optional `extras/h3x_energy_arbitrage` 
 
 - Register `40901` is written as signed `S16`: negative values charge, positive values discharge.
 - The integration sets EMS mode `40907` to `4` (`User mode`) before nonzero charge/discharge power writes.
+- After writes, the Modbus TCP socket is reconnected and confirmation is left to the next scheduled poll. This avoids duplicate write responses being consumed as the next read.
 - IP and port can be changed later from **Settings > Devices & services > Force H3X Bridge > Configure**.
 - Keep only one Modbus client connected to the inverter. Disable the original `pylon_fh3x` integration and other polling tools for the same H3X while using Force H3X Bridge; concurrent TCP sessions can desynchronize Modbus transaction IDs.
 

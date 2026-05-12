@@ -341,13 +341,17 @@ class PylontechCoordinator(DataUpdateCoordinator):
         value: int,
         slave: int = 2,
         signed: bool = False,
-        refresh: bool = True,
+        refresh: bool = False,
     ) -> bool:
         """Write one 16-bit register.
 
         Pylontech documents register 40901 as S16: positive discharges and
         negative charges. pymodbus writes a Modbus register word, so signed
         values are encoded explicitly as two's-complement U16 words.
+
+        The H3X can echo a duplicate write response after the acknowledged
+        write. Reconnect after every write so the next read cannot consume
+        stale write frames from the same TCP socket.
         """
         success = False
         try:
@@ -360,16 +364,19 @@ class PylontechCoordinator(DataUpdateCoordinator):
                     self.client, address, register_value, slave
                 )
 
-            if res.isError():
-                _LOGGER.error(
-                    "Error writing register %s raw=%s encoded=%s signed=%s: %s",
-                    address,
-                    value,
-                    register_value,
-                    signed,
-                    res,
-                )
-                return False
+                if res.isError():
+                    self._reset_client()
+                    _LOGGER.error(
+                        "Error writing register %s raw=%s encoded=%s signed=%s: %s",
+                        address,
+                        value,
+                        register_value,
+                        signed,
+                        res,
+                    )
+                    return False
+
+                self._reset_client()
 
             success = True
 
@@ -394,7 +401,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
         address: int,
         value: int,
         slave: int = 2,
-        refresh: bool = True,
+        refresh: bool = False,
     ) -> bool:
         """Write a 32-bit signed value (S32) as two consecutive 16-bit registers."""
         success = False
@@ -409,9 +416,12 @@ class PylontechCoordinator(DataUpdateCoordinator):
                     self.client, address, [high, low], slave
                 )
 
-            if res.isError():
-                _LOGGER.error("Error writing 32-bit register %s: %s", address, res)
-                return False
+                if res.isError():
+                    self._reset_client()
+                    _LOGGER.error("Error writing 32-bit register %s: %s", address, res)
+                    return False
+
+                self._reset_client()
 
             success = True
 
