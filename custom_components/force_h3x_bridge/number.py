@@ -113,8 +113,19 @@ class PylontechNumber(CoordinatorEntity, NumberEntity):
         entry: ConfigEntry,
     ) -> None:
         """Initialize the number."""
-        super().__init__(coordinator)
         self.entity_description = description
+        if description.native_min_value is not None:
+            self._attr_native_min_value = description.native_min_value
+        if description.native_max_value is not None:
+            self._attr_native_max_value = description.native_max_value
+        if description.native_step is not None:
+            self._attr_native_step = description.native_step
+        if description.native_unit_of_measurement is not None:
+            self._attr_native_unit_of_measurement = description.native_unit_of_measurement
+        if description.mode is not None:
+            self._attr_mode = description.mode
+
+        super().__init__(coordinator)
         
         self._attr_unique_id = f"{DOMAIN}_{entry.data['host']}_{description.key}"
         self._attr_device_info = {

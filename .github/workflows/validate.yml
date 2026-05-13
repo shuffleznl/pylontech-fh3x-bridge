@@ -19,6 +19,8 @@ jobs:
         run: python -m compileall custom_components extras tools
       - name: Validate Modbus write sequence
         run: python tools/validate_modbus_write_sequence.py
+      - name: Validate number entity metadata
+        run: python tools/validate_number_metadata.py
       - name: Validate JSON
         run: |
           python -m json.tool hacs.json > /dev/null
