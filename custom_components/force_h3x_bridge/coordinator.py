@@ -14,6 +14,9 @@ from .const import DOMAIN, DEFAULT_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
+MODBUS_RECONNECT_SETTLE_SECONDS = 0.75
+MODBUS_WRITE_ATTEMPTS = 3
+
 # =========================================================
 # Helper functions for Modbus decoding
 # =========================================================
@@ -90,6 +93,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
         self.port = port
         self.client = self._new_client()
         self._modbus_lock = asyncio.Lock()
+        self._last_client_reset: float | None = None
         
         super().__init__(
             hass,
@@ -113,8 +117,17 @@ class PylontechCoordinator(DataUpdateCoordinator):
         """Ensure the Modbus TCP client is connected."""
         if self.client.connected:
             return
+
+        if self._last_client_reset is not None:
+            elapsed = asyncio.get_running_loop().time() - self._last_client_reset
+            if elapsed < MODBUS_RECONNECT_SETTLE_SECONDS:
+                await asyncio.sleep(MODBUS_RECONNECT_SETTLE_SECONDS - elapsed)
+            self._last_client_reset = None
+
         if not await self.client.connect():
             raise ModbusException(f"Failed to connect to {self.host}:{self.port}")
+        if not self.client.connected:
+            raise ModbusException(f"Connected client is not ready for {self.host}:{self.port}")
 
     def _reset_client(self) -> None:
         """Close and recreate the Modbus client after protocol desync/errors."""
@@ -122,6 +135,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
             self.client.close()
         finally:
             self.client = self._new_client()
+            self._last_client_reset = asyncio.get_running_loop().time()
 
     async def async_close(self) -> None:
         """Close the Modbus client safely."""
@@ -353,44 +367,74 @@ class PylontechCoordinator(DataUpdateCoordinator):
         write. Reconnect after every write so the next read cannot consume
         stale write frames from the same TCP socket.
         """
-        success = False
         try:
             register_value = (
                 encode_16bit_int(value) if signed else encode_16bit_uint(value)
             )
-            async with self._modbus_lock:
-                await self._ensure_connected()
-                res = await _modbus_write_register(
-                    self.client, address, register_value, slave
-                )
-
-                if res.isError():
-                    self._reset_client()
-                    _LOGGER.error(
-                        "Error writing register %s raw=%s encoded=%s signed=%s: %s",
-                        address,
-                        value,
-                        register_value,
-                        signed,
-                        res,
-                    )
-                    return False
-
-                self._reset_client()
-
-            success = True
 
         except ValueError as err:
             _LOGGER.error("Invalid value for register %s: %s", address, err)
             return False
-        except ModbusException as err:
-            self._reset_client()
-            _LOGGER.error("Modbus error while writing register %s: %s", address, err)
-            return False
-        except Exception as err:
-            self._reset_client()
-            _LOGGER.error("Unexpected error while writing register %s: %s", address, err)
-            return False
+
+        success = False
+        async with self._modbus_lock:
+            for attempt in range(1, MODBUS_WRITE_ATTEMPTS + 1):
+                try:
+                    await self._ensure_connected()
+                    res = await _modbus_write_register(
+                        self.client, address, register_value, slave
+                    )
+
+                    self._reset_client()
+
+                    if res.isError():
+                        _LOGGER.error(
+                            "Error writing register %s raw=%s encoded=%s signed=%s: %s",
+                            address,
+                            value,
+                            register_value,
+                            signed,
+                            res,
+                        )
+                        return False
+
+                    success = True
+                    break
+
+                except ModbusException as err:
+                    self._reset_client()
+                    if attempt == MODBUS_WRITE_ATTEMPTS:
+                        _LOGGER.error(
+                            "Modbus error while writing register %s after %s attempts: %s",
+                            address,
+                            attempt,
+                            err,
+                        )
+                        return False
+                    _LOGGER.warning(
+                        "Modbus write register %s failed on attempt %s/%s; retrying: %s",
+                        address,
+                        attempt,
+                        MODBUS_WRITE_ATTEMPTS,
+                        err,
+                    )
+                except Exception as err:
+                    self._reset_client()
+                    if attempt == MODBUS_WRITE_ATTEMPTS:
+                        _LOGGER.error(
+                            "Unexpected error while writing register %s after %s attempts: %s",
+                            address,
+                            attempt,
+                            err,
+                        )
+                        return False
+                    _LOGGER.warning(
+                        "Unexpected write failure for register %s on attempt %s/%s; retrying: %s",
+                        address,
+                        attempt,
+                        MODBUS_WRITE_ATTEMPTS,
+                        err,
+                    )
 
         if success and refresh:
             await self.async_request_refresh()
@@ -404,35 +448,62 @@ class PylontechCoordinator(DataUpdateCoordinator):
         refresh: bool = False,
     ) -> bool:
         """Write a 32-bit signed value (S32) as two consecutive 16-bit registers."""
+        # Pack S32 into two U16 registers (big-endian)
+        packed = struct.pack('>i', value)
+        high, low = struct.unpack('>HH', packed)
+
         success = False
-        try:
-            # Pack S32 into two U16 registers (big-endian)
-            packed = struct.pack('>i', value)
-            high, low = struct.unpack('>HH', packed)
+        async with self._modbus_lock:
+            for attempt in range(1, MODBUS_WRITE_ATTEMPTS + 1):
+                try:
+                    await self._ensure_connected()
+                    res = await _modbus_write_registers(
+                        self.client, address, [high, low], slave
+                    )
 
-            async with self._modbus_lock:
-                await self._ensure_connected()
-                res = await _modbus_write_registers(
-                    self.client, address, [high, low], slave
-                )
-
-                if res.isError():
                     self._reset_client()
-                    _LOGGER.error("Error writing 32-bit register %s: %s", address, res)
-                    return False
 
-                self._reset_client()
+                    if res.isError():
+                        _LOGGER.error("Error writing 32-bit register %s: %s", address, res)
+                        return False
 
-            success = True
+                    success = True
+                    break
 
-        except ModbusException as err:
-            self._reset_client()
-            _LOGGER.error("Modbus error while writing 32-bit register: %s", err)
-            return False
-        except Exception as err:
-            self._reset_client()
-            _LOGGER.error("Unexpected error writing 32-bit register: %s", err)
-            return False
+                except ModbusException as err:
+                    self._reset_client()
+                    if attempt == MODBUS_WRITE_ATTEMPTS:
+                        _LOGGER.error(
+                            "Modbus error while writing 32-bit register %s after %s attempts: %s",
+                            address,
+                            attempt,
+                            err,
+                        )
+                        return False
+                    _LOGGER.warning(
+                        "Modbus write 32-bit register %s failed on attempt %s/%s; retrying: %s",
+                        address,
+                        attempt,
+                        MODBUS_WRITE_ATTEMPTS,
+                        err,
+                    )
+                except Exception as err:
+                    self._reset_client()
+                    if attempt == MODBUS_WRITE_ATTEMPTS:
+                        _LOGGER.error(
+                            "Unexpected error writing 32-bit register %s after %s attempts: %s",
+                            address,
+                            attempt,
+                            err,
+                        )
+                        return False
+                    _LOGGER.warning(
+                        "Unexpected write failure for 32-bit register %s on attempt %s/%s; retrying: %s",
+                        address,
+                        attempt,
+                        MODBUS_WRITE_ATTEMPTS,
+                        err,
+                    )
 
         if success and refresh:
             await self.async_request_refresh()

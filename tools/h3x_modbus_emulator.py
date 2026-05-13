@@ -192,7 +192,7 @@ async def handle_client(
                 writer.write(frame)
                 await writer.drain()
 
-    except asyncio.IncompleteReadError:
+    except (asyncio.IncompleteReadError, ConnectionError, OSError):
         pass
     finally:
         writer.close()

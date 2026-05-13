@@ -19,3 +19,10 @@ Supported function codes:
 ```
 
 The emulator is not a battery simulator. It is a protocol harness for validating register encoding, read/write order, reconnect behavior, and transaction-ID resilience before pushing a HACS release.
+
+Run the PyModbus write-sequence validation locally:
+
+```bash
+python -m pip install "pymodbus>=3.11.2"
+python tools/validate_modbus_write_sequence.py
+```
