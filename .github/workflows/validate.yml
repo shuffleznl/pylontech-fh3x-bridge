@@ -23,6 +23,8 @@ jobs:
         run: python tools/validate_number_metadata.py
       - name: Validate charge command logic
         run: python tools/validate_charge_command_logic.py
+      - name: Validate time-slot protocol
+        run: python tools/validate_time_slot_protocol.py
       - name: Validate JSON
         run: |
           python -m json.tool hacs.json > /dev/null

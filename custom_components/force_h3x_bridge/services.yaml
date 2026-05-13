@@ -1,0 +1,116 @@
+force_charge_now:
+  name: Force charge now
+  description: Program a temporary H3X time slot that charges the battery from the grid.
+  fields:
+    config_entry_id:
+      required: true
+      example: "0123456789abcdef0123456789abcdef"
+      selector:
+        text:
+    slot:
+      required: false
+      default: 4
+      selector:
+        number:
+          min: 1
+          max: 4
+          mode: box
+    power_percent:
+      required: false
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+          mode: box
+    duration_minutes:
+      required: false
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 240
+          unit_of_measurement: min
+          mode: box
+    ems_mode:
+      required: false
+      default: pn_customer
+      selector:
+        select:
+          options:
+            - pn_customer
+            - user
+    sync_clock:
+      required: false
+      default: true
+      selector:
+        boolean:
+
+test_force_charge_modes:
+  name: Test force charge modes
+  description: Try a temporary force-charge slot using EMS mode 5 and EMS mode 4, returning measured snapshots.
+  fields:
+    config_entry_id:
+      required: true
+      example: "0123456789abcdef0123456789abcdef"
+      selector:
+        text:
+    slot:
+      required: false
+      default: 4
+      selector:
+        number:
+          min: 1
+          max: 4
+          mode: box
+    power_percent:
+      required: false
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+          mode: box
+    duration_minutes:
+      required: false
+      default: 10
+      selector:
+        number:
+          min: 2
+          max: 60
+          unit_of_measurement: min
+          mode: box
+    settle_seconds:
+      required: false
+      default: 45
+      selector:
+        number:
+          min: 5
+          max: 300
+          unit_of_measurement: s
+          mode: box
+    sync_clock:
+      required: false
+      default: true
+      selector:
+        boolean:
+
+clear_time_slot:
+  name: Clear time slot
+  description: Disable one H3X time slot.
+  fields:
+    config_entry_id:
+      required: true
+      example: "0123456789abcdef0123456789abcdef"
+      selector:
+        text:
+    slot:
+      required: false
+      default: 4
+      selector:
+        number:
+          min: 1
+          max: 4
+          mode: box

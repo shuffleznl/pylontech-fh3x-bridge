@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import struct
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ModbusException
@@ -11,14 +11,25 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, DEFAULT_SCAN_INTERVAL
+from .protocol import (
+    EMS_MODE_USER,
+    REGISTER_CHARGE_DISCHARGE_POWER,
+    REGISTER_EMS_MODE,
+    REGISTER_REALTIME_YEAR,
+    SLOT_MODE_CHARGE,
+    WEEKDAY_ALL,
+    encode_16bit_int,
+    encode_16bit_uint,
+    encode_percent_tenths,
+    encode_realtime_registers,
+    encode_time_slot_values,
+    time_slot_registers,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-EMS_MODE_USER = 4
 MODBUS_RECONNECT_SETTLE_SECONDS = 0.75
 MODBUS_WRITE_ATTEMPTS = 3
-REGISTER_CHARGE_DISCHARGE_POWER = 40901
-REGISTER_EMS_MODE = 40907
 
 # =========================================================
 # Helper functions for Modbus decoding
@@ -34,20 +45,6 @@ def get_32bit_int(regs, idx):
 
 def get_32bit_float(regs, idx):
     return struct.unpack('>f', struct.pack('>HH', regs[idx], regs[idx+1]))[0]
-
-
-def encode_16bit_uint(value: int) -> int:
-    """Encode an unsigned 16-bit register value."""
-    if not 0 <= value <= 0xFFFF:
-        raise ValueError(f"U16 value out of range: {value}")
-    return value
-
-
-def encode_16bit_int(value: int) -> int:
-    """Encode a signed 16-bit register value as the Modbus wire word."""
-    if not -0x8000 <= value <= 0x7FFF:
-        raise ValueError(f"S16 value out of range: {value}")
-    return struct.unpack(">H", struct.pack(">h", value))[0]
 
 
 async def _modbus_read(client, address, count, target_id):
@@ -459,6 +456,75 @@ class PylontechCoordinator(DataUpdateCoordinator):
 
         return False
 
+    async def _write_registers_locked(
+        self,
+        address: int,
+        values: list[int],
+        slave: int,
+        *,
+        reset_after: bool = True,
+    ) -> bool:
+        """Write multiple already-encoded registers while the Modbus lock is held."""
+        for attempt in range(1, MODBUS_WRITE_ATTEMPTS + 1):
+            try:
+                await self._ensure_connected()
+                res = await _modbus_write_registers(
+                    self.client, address, values, slave
+                )
+
+                if reset_after:
+                    self._reset_client()
+
+                if res.isError():
+                    if not reset_after:
+                        self._reset_client()
+                    _LOGGER.error(
+                        "Error writing registers %s values=%s: %s",
+                        address,
+                        values,
+                        res,
+                    )
+                    return False
+
+                return True
+
+            except ModbusException as err:
+                self._reset_client()
+                if attempt == MODBUS_WRITE_ATTEMPTS:
+                    _LOGGER.error(
+                        "Modbus error while writing registers %s after %s attempts: %s",
+                        address,
+                        attempt,
+                        err,
+                    )
+                    return False
+                _LOGGER.warning(
+                    "Modbus write registers %s failed on attempt %s/%s; retrying: %s",
+                    address,
+                    attempt,
+                    MODBUS_WRITE_ATTEMPTS,
+                    err,
+                )
+            except Exception as err:
+                self._reset_client()
+                if attempt == MODBUS_WRITE_ATTEMPTS:
+                    _LOGGER.error(
+                        "Unexpected error writing registers %s after %s attempts: %s",
+                        address,
+                        attempt,
+                        err,
+                    )
+                    return False
+                _LOGGER.warning(
+                    "Unexpected write failure for registers %s on attempt %s/%s; retrying: %s",
+                    address,
+                    attempt,
+                    MODBUS_WRITE_ATTEMPTS,
+                    err,
+                )
+
+        return False
+
     async def async_write_register(
         self,
         address: int,
@@ -539,6 +605,184 @@ class PylontechCoordinator(DataUpdateCoordinator):
             if self.data is not None:
                 self.data["charge_discharge_power"] = value
         return success
+
+    async def async_program_charge_slot(
+        self,
+        *,
+        slot: int,
+        power_percent: int,
+        start: datetime,
+        end: datetime,
+        ems_mode: int,
+        sync_clock: bool = True,
+        clock_time: datetime | None = None,
+        weekday_mask: int = WEEKDAY_ALL,
+        slave: int = 2,
+    ) -> dict:
+        """Program a time-slot based force-charge window."""
+        try:
+            registers = time_slot_registers(slot)
+            slot_values = encode_time_slot_values(
+                start,
+                end,
+                mode=SLOT_MODE_CHARGE,
+                power_percent=power_percent,
+                weekday_mask=weekday_mask,
+            )
+            power_raw = encode_percent_tenths(power_percent)
+            ems_mode_word = encode_16bit_uint(ems_mode)
+            realtime_values = encode_realtime_registers(
+                clock_time or datetime.now().astimezone()
+            )
+        except ValueError as err:
+            return {"success": False, "error": str(err)}
+
+        async with self._modbus_lock:
+            if sync_clock:
+                if not await self._write_registers_locked(
+                    REGISTER_REALTIME_YEAR,
+                    realtime_values,
+                    slave,
+                    reset_after=False,
+                ):
+                    return {"success": False, "error": "failed to sync inverter clock"}
+
+            if not await self._write_register_locked(
+                registers.enable,
+                0,
+                slave,
+                raw_value=0,
+                signed=False,
+                reset_after=False,
+            ):
+                return {"success": False, "error": f"failed to disable slot {slot}"}
+
+            if not await self._write_registers_locked(
+                registers.start_time,
+                slot_values,
+                slave,
+                reset_after=False,
+            ):
+                return {"success": False, "error": f"failed to write slot {slot}"}
+
+            if not await self._write_register_locked(
+                REGISTER_EMS_MODE,
+                ems_mode_word,
+                slave,
+                raw_value=ems_mode,
+                signed=False,
+                reset_after=False,
+            ):
+                return {"success": False, "error": f"failed to set EMS mode {ems_mode}"}
+
+            await asyncio.sleep(0.2)
+
+            if not await self._write_register_locked(
+                registers.enable,
+                1,
+                slave,
+                raw_value=1,
+                signed=False,
+            ):
+                return {"success": False, "error": f"failed to enable slot {slot}"}
+
+        if self.data is not None:
+            self.data["ems_mode"] = str(ems_mode)
+            self.data[f"period_{slot}"] = 1
+
+        return {
+            "success": True,
+            "slot": slot,
+            "ems_mode": ems_mode,
+            "mode": "charge",
+            "power_percent": power_percent,
+            "power_raw": power_raw,
+            "start_register": slot_values[0],
+            "end_register": slot_values[1],
+            "weekday_mask": weekday_mask,
+            "sync_clock": sync_clock,
+        }
+
+    async def async_clear_time_slot(
+        self,
+        *,
+        slot: int,
+        slave: int = 2,
+    ) -> dict:
+        """Disable one time slot."""
+        try:
+            registers = time_slot_registers(slot)
+        except ValueError as err:
+            return {"success": False, "error": str(err)}
+
+        async with self._modbus_lock:
+            success = await self._write_register_locked(
+                registers.enable,
+                0,
+                slave,
+                raw_value=0,
+                signed=False,
+            )
+
+        if not success:
+            return {"success": False, "error": f"failed to disable slot {slot}"}
+
+        if self.data is not None:
+            self.data[f"period_{slot}"] = 0
+
+        return {"success": True, "slot": slot, "enabled": False}
+
+    async def async_test_force_charge_modes(
+        self,
+        *,
+        slot: int,
+        power_percent: int,
+        duration_minutes: int,
+        settle_seconds: int,
+        sync_clock: bool = True,
+    ) -> dict:
+        """Try PN-Customer and User EMS modes for a slot-based charge window."""
+        from .protocol import EMS_MODE_PN_CUSTOMER
+
+        results = []
+        for ems_mode in (EMS_MODE_PN_CUSTOMER, EMS_MODE_USER):
+            now = datetime.now().astimezone()
+            result = await self.async_program_charge_slot(
+                slot=slot,
+                power_percent=power_percent,
+                start=now - timedelta(minutes=1),
+                end=now + timedelta(minutes=duration_minutes),
+                ems_mode=ems_mode,
+                sync_clock=sync_clock,
+                clock_time=now,
+            )
+
+            if result["success"]:
+                await asyncio.sleep(settle_seconds)
+                await self.async_request_refresh()
+
+            snapshot = {
+                "battery_status": self.data.get("battery_status") if self.data else None,
+                "battery_power": self.data.get("battery_power") if self.data else None,
+                "battery_current": self.data.get("battery_current") if self.data else None,
+                "battery_soc": self.data.get("battery_soc") if self.data else None,
+                "charge_discharge_power": self.data.get("charge_discharge_power")
+                if self.data
+                else None,
+                "ems_mode": self.data.get("ems_mode") if self.data else None,
+                f"period_{slot}": self.data.get(f"period_{slot}") if self.data else None,
+            }
+            result["snapshot"] = snapshot
+            results.append(result)
+
+        return {
+            "success": any(result["success"] for result in results),
+            "slot": slot,
+            "power_percent": power_percent,
+            "duration_minutes": duration_minutes,
+            "settle_seconds": settle_seconds,
+            "results": results,
+        }
         
     async def async_write_register_32bit(
         self,

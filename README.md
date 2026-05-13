@@ -63,6 +63,18 @@ The price and decision cards require the optional `extras/h3x_energy_arbitrage` 
 - IP and port can be changed later from **Settings > Devices & services > Force H3X Bridge > Configure**.
 - Keep only one Modbus client connected to the inverter. Disable the original `pylon_fh3x` integration and other polling tools for the same H3X while using Force H3X Bridge; concurrent TCP sessions can desynchronize Modbus transaction IDs.
 
+## v0.2 Time-Slot Services
+
+The `v0.2-timeslot-force-charge` branch adds service-based control using the manufacturer time-slot registers. These services are intended for controlled testing before a stable release:
+
+| Service | Purpose |
+| --- | --- |
+| `force_h3x_bridge.force_charge_now` | Program a temporary charge slot, default slot `4`, default EMS mode `pn_customer` (`40907 = 5`). |
+| `force_h3x_bridge.test_force_charge_modes` | Program the same temporary charge slot first with EMS mode `5`, then with EMS mode `4`, and return measured snapshots. |
+| `force_h3x_bridge.clear_time_slot` | Disable one time slot. |
+
+The slot command writes `40908-40931` style registers: disable slot, optionally sync inverter clock (`40932-40935`), write start/end/mode/power/weekday, set EMS mode, then enable the slot.
+
 ## Files
 
 ```text
