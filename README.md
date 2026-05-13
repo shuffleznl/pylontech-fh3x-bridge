@@ -65,7 +65,7 @@ The price and decision cards require the optional `extras/h3x_energy_arbitrage` 
 
 ## v0.2 Time-Slot Services
 
-The `v0.2-timeslot-force-charge` branch adds service-based control using the manufacturer time-slot registers. These services are intended for controlled testing before a stable release:
+Version `0.2.0` adds service-based control using the manufacturer time-slot registers. These services are intended for controlled testing:
 
 | Service | Purpose |
 | --- | --- |
