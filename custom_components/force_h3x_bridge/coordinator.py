@@ -4,9 +4,6 @@ import logging
 import struct
 from datetime import datetime, timedelta
 
-from pymodbus.client import AsyncModbusTcpClient
-from pymodbus.exceptions import ModbusException
-
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -25,6 +22,7 @@ from .protocol import (
     encode_time_slot_values,
     time_slot_registers,
 )
+from .transport import H3XModbusTcpClient, ModbusTransportError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,44 +45,6 @@ def get_32bit_float(regs, idx):
     return struct.unpack('>f', struct.pack('>HH', regs[idx], regs[idx+1]))[0]
 
 
-async def _modbus_read(client, address, count, target_id):
-    try:
-        return await client.read_holding_registers(address=address, count=count, slave=target_id)
-    except TypeError:
-        pass
-    try:
-        return await client.read_holding_registers(address=address, count=count, unit=target_id)
-    except TypeError:
-        pass
-    return await client.read_holding_registers(address=address, count=count, device_id=target_id)
-
-
-async def _modbus_write_register(client, address, value, target_id):
-    """Write one register across supported pymodbus keyword variants."""
-    try:
-        return await client.write_register(address=address, value=value, slave=target_id)
-    except TypeError:
-        pass
-    try:
-        return await client.write_register(address=address, value=value, unit=target_id)
-    except TypeError:
-        pass
-    return await client.write_register(address=address, value=value, device_id=target_id)
-
-
-async def _modbus_write_registers(client, address, values, target_id):
-    """Write multiple registers across supported pymodbus keyword variants."""
-    try:
-        return await client.write_registers(address=address, values=values, slave=target_id)
-    except TypeError:
-        pass
-    try:
-        return await client.write_registers(address=address, values=values, unit=target_id)
-    except TypeError:
-        pass
-    return await client.write_registers(address=address, values=values, device_id=target_id)
-
-
 class PylontechCoordinator(DataUpdateCoordinator):
     """Class to manage fetching Modbus data from the inverter."""
 
@@ -102,16 +62,9 @@ class PylontechCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
         )
 
-    def _new_client(self) -> AsyncModbusTcpClient:
+    def _new_client(self) -> H3XModbusTcpClient:
         """Create a fresh Modbus TCP client."""
-        return AsyncModbusTcpClient(
-            host=self.host,
-            port=self.port,
-            timeout=5,
-            retries=0,
-            reconnect_delay=0.5,
-            reconnect_delay_max=5,
-        )
+        return H3XModbusTcpClient(host=self.host, port=self.port, timeout=5)
 
     async def _ensure_connected(self) -> None:
         """Ensure the Modbus TCP client is connected."""
@@ -125,9 +78,11 @@ class PylontechCoordinator(DataUpdateCoordinator):
             self._last_client_reset = None
 
         if not await self.client.connect():
-            raise ModbusException(f"Failed to connect to {self.host}:{self.port}")
+            raise ModbusTransportError(f"Failed to connect to {self.host}:{self.port}")
         if not self.client.connected:
-            raise ModbusException(f"Connected client is not ready for {self.host}:{self.port}")
+            raise ModbusTransportError(
+                f"Connected client is not ready for {self.host}:{self.port}"
+            )
 
     def _reset_client(self) -> None:
         """Close and recreate the Modbus client after protocol desync/errors."""
@@ -147,39 +102,15 @@ class PylontechCoordinator(DataUpdateCoordinator):
         # 100ms pause
         await asyncio.sleep(0.1) 
         try:
-            res = await _modbus_read(self.client, address, count, slave)
-        except ModbusException as err:
-            log_level = logging.DEBUG if optional else logging.WARNING
-            _LOGGER.log(
-                log_level,
+            return await self.client.read_holding_registers(address, count, slave)
+        except ModbusTransportError as err:
+            _LOGGER.debug(
                 "error while reading address %s (Slave %s): %s",
                 address,
                 slave,
                 err,
             )
             return None
-
-        if res is None:
-            log_level = logging.DEBUG if optional else logging.WARNING
-            _LOGGER.log(
-                log_level,
-                "no data while reading address %s (Slave %s)",
-                address,
-                slave,
-            )
-            return None
-
-        if res.isError():
-            log_level = logging.DEBUG if optional else logging.WARNING
-            _LOGGER.log(
-                log_level,
-                "error while reading address %s (Slave %s): %s",
-                address,
-                slave,
-                res,
-            )
-            return None
-        return res.registers
 
     async def _async_update_data(self):
         """Fetch data from the inverter via Modbus with serialized access."""
@@ -371,7 +302,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
 
             return data
 
-        except ModbusException as err:
+        except ModbusTransportError as err:
             self._reset_client()
             raise UpdateFailed(f"error with modbus communication: {err}")
         except Exception as err:
@@ -386,40 +317,23 @@ class PylontechCoordinator(DataUpdateCoordinator):
         *,
         raw_value: int,
         signed: bool,
-        reset_after: bool = True,
+        settle_after: bool = True,
     ) -> bool:
         """Write one already-encoded register while the Modbus lock is held.
 
-        The H3X can echo a duplicate write response after the acknowledged
-        write. Reconnect after every write so the next request cannot consume
-        stale write frames from the same TCP socket.
+        The raw transport discards stale transaction ids, so the socket can stay
+        open while the next command consumes and ignores late duplicate ACKs.
         """
         for attempt in range(1, MODBUS_WRITE_ATTEMPTS + 1):
             try:
                 await self._ensure_connected()
-                res = await _modbus_write_register(
-                    self.client, address, register_value, slave
-                )
-
-                if reset_after:
-                    self._reset_client()
-
-                if res.isError():
-                    if not reset_after:
-                        self._reset_client()
-                    _LOGGER.error(
-                        "Error writing register %s raw=%s encoded=%s signed=%s: %s",
-                        address,
-                        raw_value,
-                        register_value,
-                        signed,
-                        res,
-                    )
-                    return False
+                await self.client.write_register(address, register_value, slave)
+                if settle_after:
+                    await asyncio.sleep(0.05)
 
                 return True
 
-            except ModbusException as err:
+            except ModbusTransportError as err:
                 self._reset_client()
                 if attempt == MODBUS_WRITE_ATTEMPTS:
                     _LOGGER.error(
@@ -462,33 +376,19 @@ class PylontechCoordinator(DataUpdateCoordinator):
         values: list[int],
         slave: int,
         *,
-        reset_after: bool = True,
+        settle_after: bool = True,
     ) -> bool:
         """Write multiple already-encoded registers while the Modbus lock is held."""
         for attempt in range(1, MODBUS_WRITE_ATTEMPTS + 1):
             try:
                 await self._ensure_connected()
-                res = await _modbus_write_registers(
-                    self.client, address, values, slave
-                )
-
-                if reset_after:
-                    self._reset_client()
-
-                if res.isError():
-                    if not reset_after:
-                        self._reset_client()
-                    _LOGGER.error(
-                        "Error writing registers %s values=%s: %s",
-                        address,
-                        values,
-                        res,
-                    )
-                    return False
+                await self.client.write_registers(address, values, slave)
+                if settle_after:
+                    await asyncio.sleep(0.05)
 
                 return True
 
-            except ModbusException as err:
+            except ModbusTransportError as err:
                 self._reset_client()
                 if attempt == MODBUS_WRITE_ATTEMPTS:
                     _LOGGER.error(
@@ -584,7 +484,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
                     slave,
                     raw_value=EMS_MODE_USER,
                     signed=False,
-                    reset_after=False,
+                    settle_after=False,
                 )
                 if not mode_success:
                     return False
@@ -643,7 +543,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
                     REGISTER_REALTIME_YEAR,
                     realtime_values,
                     slave,
-                    reset_after=False,
+                    settle_after=False,
                 ):
                     return {"success": False, "error": "failed to sync inverter clock"}
 
@@ -653,7 +553,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
                 slave,
                 raw_value=0,
                 signed=False,
-                reset_after=False,
+                settle_after=False,
             ):
                 return {"success": False, "error": f"failed to disable slot {slot}"}
 
@@ -661,7 +561,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
                 registers.start_time,
                 slot_values,
                 slave,
-                reset_after=False,
+                settle_after=False,
             ):
                 return {"success": False, "error": f"failed to write slot {slot}"}
 
@@ -671,7 +571,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
                 slave,
                 raw_value=ems_mode,
                 signed=False,
-                reset_after=False,
+                settle_after=False,
             ):
                 return {"success": False, "error": f"failed to set EMS mode {ems_mode}"}
 
@@ -801,20 +701,12 @@ class PylontechCoordinator(DataUpdateCoordinator):
             for attempt in range(1, MODBUS_WRITE_ATTEMPTS + 1):
                 try:
                     await self._ensure_connected()
-                    res = await _modbus_write_registers(
-                        self.client, address, [high, low], slave
-                    )
-
-                    self._reset_client()
-
-                    if res.isError():
-                        _LOGGER.error("Error writing 32-bit register %s: %s", address, res)
-                        return False
+                    await self.client.write_registers(address, [high, low], slave)
 
                     success = True
                     break
 
-                except ModbusException as err:
+                except ModbusTransportError as err:
                     self._reset_client()
                     if attempt == MODBUS_WRITE_ATTEMPTS:
                         _LOGGER.error(

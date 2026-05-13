@@ -68,7 +68,7 @@ def main() -> None:
         "registers.enable",
         "registers.start_time",
         "REGISTER_EMS_MODE",
-        "reset_after=False",
+        "settle_after=False",
         "SLOT_MODE_CHARGE",
     ]
     for token in required_tokens:
