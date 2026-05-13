@@ -14,8 +14,11 @@ from .const import DOMAIN, DEFAULT_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
+EMS_MODE_USER = 4
 MODBUS_RECONNECT_SETTLE_SECONDS = 0.75
 MODBUS_WRITE_ATTEMPTS = 3
+REGISTER_CHARGE_DISCHARGE_POWER = 40901
+REGISTER_EMS_MODE = 40907
 
 # =========================================================
 # Helper functions for Modbus decoding
@@ -142,13 +145,42 @@ class PylontechCoordinator(DataUpdateCoordinator):
         async with self._modbus_lock:
             self.client.close()
 
-    async def safe_read(self, address, count, slave):
+    async def safe_read(self, address, count, slave, optional: bool = False):
         
         # 100ms pause
         await asyncio.sleep(0.1) 
-        res = await _modbus_read(self.client, address, count, slave)
+        try:
+            res = await _modbus_read(self.client, address, count, slave)
+        except ModbusException as err:
+            log_level = logging.DEBUG if optional else logging.WARNING
+            _LOGGER.log(
+                log_level,
+                "error while reading address %s (Slave %s): %s",
+                address,
+                slave,
+                err,
+            )
+            return None
+
+        if res is None:
+            log_level = logging.DEBUG if optional else logging.WARNING
+            _LOGGER.log(
+                log_level,
+                "no data while reading address %s (Slave %s)",
+                address,
+                slave,
+            )
+            return None
+
         if res.isError():
-            _LOGGER.warning("error while reading adress %s (Slave %s): %s", address, slave, res)
+            log_level = logging.DEBUG if optional else logging.WARNING
+            _LOGGER.log(
+                log_level,
+                "error while reading address %s (Slave %s): %s",
+                address,
+                slave,
+                res,
+            )
             return None
         return res.registers
 
@@ -327,7 +359,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
                 data["bms_cycles"] = get_16bit_uint(r_bms_t, 2)
 
             # BMS Cell Volts (5136 / 0x1410 t/m 0x1411)
-            r_bms_cv = await self.safe_read(5136, 2, 1)
+            r_bms_cv = await self.safe_read(5136, 2, 1, optional=True)
             if r_bms_cv:
                 data["bms_cell_voltage_max"] = get_16bit_uint(r_bms_cv, 0) * 0.001
                 data["bms_cell_voltage_min"] = get_16bit_uint(r_bms_cv, 1) * 0.001
@@ -349,6 +381,80 @@ class PylontechCoordinator(DataUpdateCoordinator):
             self._reset_client()
             raise UpdateFailed(f"unexpected error: {err}")
 
+    async def _write_register_locked(
+        self,
+        address: int,
+        register_value: int,
+        slave: int,
+        *,
+        raw_value: int,
+        signed: bool,
+    ) -> bool:
+        """Write one already-encoded register while the Modbus lock is held.
+
+        The H3X can echo a duplicate write response after the acknowledged
+        write. Reconnect after every write so the next request cannot consume
+        stale write frames from the same TCP socket.
+        """
+        for attempt in range(1, MODBUS_WRITE_ATTEMPTS + 1):
+            try:
+                await self._ensure_connected()
+                res = await _modbus_write_register(
+                    self.client, address, register_value, slave
+                )
+
+                self._reset_client()
+
+                if res.isError():
+                    _LOGGER.error(
+                        "Error writing register %s raw=%s encoded=%s signed=%s: %s",
+                        address,
+                        raw_value,
+                        register_value,
+                        signed,
+                        res,
+                    )
+                    return False
+
+                return True
+
+            except ModbusException as err:
+                self._reset_client()
+                if attempt == MODBUS_WRITE_ATTEMPTS:
+                    _LOGGER.error(
+                        "Modbus error while writing register %s after %s attempts: %s",
+                        address,
+                        attempt,
+                        err,
+                    )
+                    return False
+                _LOGGER.warning(
+                    "Modbus write register %s failed on attempt %s/%s; retrying: %s",
+                    address,
+                    attempt,
+                    MODBUS_WRITE_ATTEMPTS,
+                    err,
+                )
+            except Exception as err:
+                self._reset_client()
+                if attempt == MODBUS_WRITE_ATTEMPTS:
+                    _LOGGER.error(
+                        "Unexpected error while writing register %s after %s attempts: %s",
+                        address,
+                        attempt,
+                        err,
+                    )
+                    return False
+                _LOGGER.warning(
+                    "Unexpected write failure for register %s on attempt %s/%s; retrying: %s",
+                    address,
+                    attempt,
+                    MODBUS_WRITE_ATTEMPTS,
+                    err,
+                )
+
+        return False
+
     async def async_write_register(
         self,
         address: int,
@@ -357,87 +463,74 @@ class PylontechCoordinator(DataUpdateCoordinator):
         signed: bool = False,
         refresh: bool = False,
     ) -> bool:
-        """Write one 16-bit register.
-
-        Pylontech documents register 40901 as S16: positive discharges and
-        negative charges. pymodbus writes a Modbus register word, so signed
-        values are encoded explicitly as two's-complement U16 words.
-
-        The H3X can echo a duplicate write response after the acknowledged
-        write. Reconnect after every write so the next read cannot consume
-        stale write frames from the same TCP socket.
-        """
+        """Write one 16-bit register."""
         try:
             register_value = (
                 encode_16bit_int(value) if signed else encode_16bit_uint(value)
             )
-
         except ValueError as err:
             _LOGGER.error("Invalid value for register %s: %s", address, err)
             return False
 
-        success = False
         async with self._modbus_lock:
-            for attempt in range(1, MODBUS_WRITE_ATTEMPTS + 1):
-                try:
-                    await self._ensure_connected()
-                    res = await _modbus_write_register(
-                        self.client, address, register_value, slave
-                    )
-
-                    self._reset_client()
-
-                    if res.isError():
-                        _LOGGER.error(
-                            "Error writing register %s raw=%s encoded=%s signed=%s: %s",
-                            address,
-                            value,
-                            register_value,
-                            signed,
-                            res,
-                        )
-                        return False
-
-                    success = True
-                    break
-
-                except ModbusException as err:
-                    self._reset_client()
-                    if attempt == MODBUS_WRITE_ATTEMPTS:
-                        _LOGGER.error(
-                            "Modbus error while writing register %s after %s attempts: %s",
-                            address,
-                            attempt,
-                            err,
-                        )
-                        return False
-                    _LOGGER.warning(
-                        "Modbus write register %s failed on attempt %s/%s; retrying: %s",
-                        address,
-                        attempt,
-                        MODBUS_WRITE_ATTEMPTS,
-                        err,
-                    )
-                except Exception as err:
-                    self._reset_client()
-                    if attempt == MODBUS_WRITE_ATTEMPTS:
-                        _LOGGER.error(
-                            "Unexpected error while writing register %s after %s attempts: %s",
-                            address,
-                            attempt,
-                            err,
-                        )
-                        return False
-                    _LOGGER.warning(
-                        "Unexpected write failure for register %s on attempt %s/%s; retrying: %s",
-                        address,
-                        attempt,
-                        MODBUS_WRITE_ATTEMPTS,
-                        err,
-                    )
+            success = await self._write_register_locked(
+                address,
+                register_value,
+                slave,
+                raw_value=value,
+                signed=signed,
+            )
 
         if success and refresh:
             await self.async_request_refresh()
+        return success
+
+    async def async_set_charge_discharge_power(
+        self,
+        value: int,
+        slave: int = 2,
+    ) -> bool:
+        """Force charge/discharge power reference.
+
+        Pylontech documents register 40901 as S16 in 0.1Pn% units:
+        positive values discharge and negative values charge. Any nonzero
+        forced reference must be sent while EMS mode is User mode.
+        """
+        try:
+            register_value = encode_16bit_int(value)
+        except ValueError as err:
+            _LOGGER.error(
+                "Invalid charge/discharge power reference %s: %s",
+                value,
+                err,
+            )
+            return False
+
+        async with self._modbus_lock:
+            if value != 0:
+                mode_success = await self._write_register_locked(
+                    REGISTER_EMS_MODE,
+                    encode_16bit_uint(EMS_MODE_USER),
+                    slave,
+                    raw_value=EMS_MODE_USER,
+                    signed=False,
+                )
+                if not mode_success:
+                    return False
+                if self.data is not None:
+                    self.data["ems_mode"] = str(EMS_MODE_USER)
+
+            success = await self._write_register_locked(
+                REGISTER_CHARGE_DISCHARGE_POWER,
+                register_value,
+                slave,
+                raw_value=value,
+                signed=True,
+            )
+
+        if success:
+            if self.data is not None:
+                self.data["charge_discharge_power"] = value
         return success
         
     async def async_write_register_32bit(

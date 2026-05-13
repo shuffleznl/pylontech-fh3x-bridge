@@ -14,8 +14,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER, MODEL
 
-EMS_MODE_USER = 4
-
 @dataclass
 class PylontechNumberEntityDescription(NumberEntityDescription):
     
@@ -157,22 +155,12 @@ class PylontechNumber(CoordinatorEntity, NumberEntity):
         # Draai de schaling om voor de Modbus verzending (bijv -50 / 0.1 = -500)
         raw_value = int(round(value / self.entity_description.scale))
 
-        if (
-            self.entity_description.force_user_mode_for_nonzero
-            and raw_value != 0
-            and self.coordinator.data.get("ems_mode") != str(EMS_MODE_USER)
-        ):
-            mode_success = await self.coordinator.async_write_register(
-                address=40907,
-                value=EMS_MODE_USER,
+        if self.entity_description.force_user_mode_for_nonzero:
+            success = await self.coordinator.async_set_charge_discharge_power(
+                value=raw_value,
                 slave=self.entity_description.slave_id,
-                refresh=False,
             )
-            if not mode_success:
-                return
-        
-
-        if getattr(self.entity_description, "is_32bit", False):
+        elif getattr(self.entity_description, "is_32bit", False):
             success = await self.coordinator.async_write_register_32bit(
                 address=self.entity_description.register_address,
                 value=raw_value,
@@ -186,7 +174,6 @@ class PylontechNumber(CoordinatorEntity, NumberEntity):
                 signed=self.entity_description.signed,
             )
 
-        
         if success:
             self.coordinator.data[self.entity_description.key] = raw_value
             self.async_write_ha_state()

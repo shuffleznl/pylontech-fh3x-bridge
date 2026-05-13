@@ -33,9 +33,9 @@ The document also states the device only supports Modbus TCP, default external L
 
    Unsigned registers must be `0..65535`. Signed registers must be `-32768..32767`.
 
-3. Nonzero `Charge/Discharge Power Ref` writes first set EMS mode register `40907` to `4` (`User mode`).
+3. Nonzero `Charge/Discharge Power Ref` writes always set EMS mode register `40907` to `4` (`User mode`) before writing register `40901`.
 
-   The manufacturer document says register `40901` must be set when EMS mode is active. In practice this makes direct UI/service calls to the number entity work without requiring a separate automation step.
+   The manufacturer document says register `40901` must be set when EMS mode is active. The command path no longer trusts cached `ems_mode`; this is important because positive discharge can appear to work in other modes, while negative forced charge generally requires User mode.
 
 4. Successful writes reconnect the Modbus TCP socket and skip immediate forced refreshes.
 

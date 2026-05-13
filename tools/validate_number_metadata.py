@@ -39,6 +39,28 @@ def find_number_init(tree: ast.AST) -> ast.FunctionDef:
     raise AssertionError("Missing PylontechNumber.__init__")
 
 
+def find_method(tree: ast.AST, class_name: str, method_name: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            for item in node.body:
+                if (
+                    isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and item.name == method_name
+                ):
+                    return item
+    raise AssertionError(f"Missing {class_name}.{method_name}")
+
+
+def has_call(node: ast.AST, method_name: str) -> bool:
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        func = child.func
+        if isinstance(func, ast.Attribute) and func.attr == method_name:
+            return True
+    return False
+
+
 def assigned_attr_name(node: ast.stmt) -> str | None:
     targets: list[ast.expr] = []
     if isinstance(node, ast.Assign):
@@ -100,6 +122,12 @@ def main() -> None:
     if missing:
         raise AssertionError(
             f"PylontechNumber.__init__ must assign before super(): {sorted(missing)}"
+        )
+
+    set_native_value = find_method(tree, "PylontechNumber", "async_set_native_value")
+    if not has_call(set_native_value, "async_set_charge_discharge_power"):
+        raise AssertionError(
+            "charge_discharge_power must use the dedicated signed command path"
         )
 
 
