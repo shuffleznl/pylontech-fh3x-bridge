@@ -4,55 +4,41 @@
 from __future__ import annotations
 
 import asyncio
-import struct
+import importlib.util
+import sys
+from pathlib import Path
 
-from pymodbus.client import AsyncModbusTcpClient
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from h3x_modbus_emulator import build_registers, handle_client
-
-
-async def modbus_read(client, address: int, count: int, slave: int):
-    try:
-        return await client.read_holding_registers(
-            address=address, count=count, slave=slave
-        )
-    except TypeError:
-        pass
-    try:
-        return await client.read_holding_registers(
-            address=address, count=count, unit=slave
-        )
-    except TypeError:
-        pass
-    return await client.read_holding_registers(
-        address=address, count=count, device_id=slave
-    )
+from h3x_modbus_emulator import build_registers, handle_client  # noqa: E402
 
 
-async def modbus_write_register(client, address: int, value: int, slave: int):
-    try:
-        return await client.write_register(address=address, value=value, slave=slave)
-    except TypeError:
-        pass
-    try:
-        return await client.write_register(address=address, value=value, unit=slave)
-    except TypeError:
-        pass
-    return await client.write_register(address=address, value=value, device_id=slave)
+def load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
-def encode_s16(value: int) -> int:
-    return struct.unpack(">H", struct.pack(">h", value))[0]
+protocol = load_module(
+    "force_h3x_protocol",
+    ROOT / "custom_components" / "force_h3x_bridge" / "protocol.py",
+)
+transport = load_module(
+    "force_h3x_transport",
+    ROOT / "custom_components" / "force_h3x_bridge" / "transport.py",
+)
 
 
-async def connect_client(port: int) -> AsyncModbusTcpClient:
-    client = AsyncModbusTcpClient(
+async def connect_client(port: int):
+    client = transport.H3XModbusTcpClient(
         host="127.0.0.1",
         port=port,
         timeout=1,
-        retries=0,
-        reconnect_delay=0.1,
-        reconnect_delay_max=0.2,
     )
     if not await client.connect():
         raise AssertionError("Modbus test client failed to connect")
@@ -66,7 +52,7 @@ async def main() -> None:
             reader,
             writer,
             registers,
-            duplicate_write_response=False,
+            duplicate_write_response=True,
             duplicate_delay=0.05,
         ),
         "127.0.0.1",
@@ -77,29 +63,20 @@ async def main() -> None:
     try:
         client = await connect_client(port)
         try:
-            result = await modbus_write_register(client, 40907, 4, slave=2)
-            if result.isError():
-                raise AssertionError(f"Write 40907 failed: {result}")
+            await client.write_register(40907, 4, slave=2)
 
             await asyncio.sleep(0.2)
 
-            result = await modbus_write_register(client, 40901, encode_s16(-500), slave=2)
-            if result.isError():
-                raise AssertionError(f"Write 40901 failed: {result}")
-        finally:
-            client.close()
-
-        await asyncio.sleep(0.75)
-
-        client = await connect_client(port)
-        try:
-            result = await modbus_read(client, 40901, 7, slave=2)
-            if result.isError():
-                raise AssertionError(f"Readback failed: {result}")
-            if result.registers[0] != encode_s16(-500):
-                raise AssertionError(f"40901 was {result.registers[0]!r}")
-            if result.registers[6] != 4:
-                raise AssertionError(f"40907 was {result.registers[6]!r}")
+            await client.write_register(
+                40901,
+                protocol.encode_16bit_int(-500),
+                slave=2,
+            )
+            result = await client.read_holding_registers(40901, 7, slave=2)
+            if result[0] != protocol.encode_16bit_int(-500):
+                raise AssertionError(f"40901 was {result[0]!r}")
+            if result[6] != 4:
+                raise AssertionError(f"40907 was {result[6]!r}")
         finally:
             client.close()
     finally:
