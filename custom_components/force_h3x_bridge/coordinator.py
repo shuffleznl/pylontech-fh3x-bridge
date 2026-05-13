@@ -111,7 +111,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
             host=self.host,
             port=self.port,
             timeout=5,
-            retries=1,
+            retries=0,
             reconnect_delay=0.5,
             reconnect_delay_max=5,
         )
@@ -389,6 +389,7 @@ class PylontechCoordinator(DataUpdateCoordinator):
         *,
         raw_value: int,
         signed: bool,
+        reset_after: bool = True,
     ) -> bool:
         """Write one already-encoded register while the Modbus lock is held.
 
@@ -403,9 +404,12 @@ class PylontechCoordinator(DataUpdateCoordinator):
                     self.client, address, register_value, slave
                 )
 
-                self._reset_client()
+                if reset_after:
+                    self._reset_client()
 
                 if res.isError():
+                    if not reset_after:
+                        self._reset_client()
                     _LOGGER.error(
                         "Error writing register %s raw=%s encoded=%s signed=%s: %s",
                         address,
@@ -514,11 +518,14 @@ class PylontechCoordinator(DataUpdateCoordinator):
                     slave,
                     raw_value=EMS_MODE_USER,
                     signed=False,
+                    reset_after=False,
                 )
                 if not mode_success:
                     return False
                 if self.data is not None:
                     self.data["ems_mode"] = str(EMS_MODE_USER)
+
+                await asyncio.sleep(0.2)
 
             success = await self._write_register_locked(
                 REGISTER_CHARGE_DISCHARGE_POWER,

@@ -59,7 +59,7 @@ The price and decision cards require the optional `extras/h3x_energy_arbitrage` 
 - Home Assistant exposes `40901` as whole percent values from `-100` to `100`; the integration converts that to the raw Modbus `0.1Pn%` signed integer.
 - The integration always sets EMS mode `40907` to `4` (`User mode`) before nonzero charge/discharge power writes.
 - After writes, the Modbus TCP socket is reconnected and confirmation is left to the next scheduled poll. This avoids duplicate write responses being consumed as the next read.
-- The reconnect path waits briefly and retries transient write connection failures before reporting an error.
+- PyModbus packet retries are disabled; the integration performs its own locked write retries so stale duplicate ACKs cannot be reused by the next request.
 - IP and port can be changed later from **Settings > Devices & services > Force H3X Bridge > Configure**.
 - Keep only one Modbus client connected to the inverter. Disable the original `pylon_fh3x` integration and other polling tools for the same H3X while using Force H3X Bridge; concurrent TCP sessions can desynchronize Modbus transaction IDs.
 

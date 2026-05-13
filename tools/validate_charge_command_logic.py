@@ -51,6 +51,11 @@ def main() -> None:
     if "encode_16bit_int(value)" not in source:
         raise AssertionError("charge/discharge value must be encoded as signed S16")
 
+    if "reset_after=False" not in source:
+        raise AssertionError(
+            "EMS mode and charge/discharge setpoint must be one command sequence"
+        )
+
 
 if __name__ == "__main__":
     main()

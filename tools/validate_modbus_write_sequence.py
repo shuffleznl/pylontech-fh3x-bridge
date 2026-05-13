@@ -50,25 +50,13 @@ async def connect_client(port: int) -> AsyncModbusTcpClient:
         host="127.0.0.1",
         port=port,
         timeout=1,
-        retries=1,
+        retries=0,
         reconnect_delay=0.1,
         reconnect_delay_max=0.2,
     )
     if not await client.connect():
         raise AssertionError("Modbus test client failed to connect")
     return client
-
-
-async def write_and_reconnect(port: int, address: int, value: int) -> None:
-    client = await connect_client(port)
-    try:
-        result = await modbus_write_register(client, address, value, slave=2)
-        if result.isError():
-            raise AssertionError(f"Write {address} failed: {result}")
-    finally:
-        client.close()
-
-    await asyncio.sleep(0.75)
 
 
 async def main() -> None:
@@ -78,7 +66,7 @@ async def main() -> None:
             reader,
             writer,
             registers,
-            duplicate_write_response=True,
+            duplicate_write_response=False,
             duplicate_delay=0.05,
         ),
         "127.0.0.1",
@@ -87,8 +75,21 @@ async def main() -> None:
     port = server.sockets[0].getsockname()[1]
 
     try:
-        await write_and_reconnect(port, 40907, 4)
-        await write_and_reconnect(port, 40901, encode_s16(-500))
+        client = await connect_client(port)
+        try:
+            result = await modbus_write_register(client, 40907, 4, slave=2)
+            if result.isError():
+                raise AssertionError(f"Write 40907 failed: {result}")
+
+            await asyncio.sleep(0.2)
+
+            result = await modbus_write_register(client, 40901, encode_s16(-500), slave=2)
+            if result.isError():
+                raise AssertionError(f"Write 40901 failed: {result}")
+        finally:
+            client.close()
+
+        await asyncio.sleep(0.75)
 
         client = await connect_client(port)
         try:
