@@ -24,6 +24,7 @@ class PylontechNumberEntityDescription(NumberEntityDescription):
     scale: float = 1.0 
     is_32bit: bool = False
     signed: bool = False
+    round_native_value: bool = False
     force_user_mode_for_nonzero: bool = False
 
 
@@ -37,10 +38,11 @@ NUMBER_TYPES: tuple[PylontechNumberEntityDescription, ...] = (
         slave_id=2,
         native_min_value=-100.0, # -100% (max charge)
         native_max_value=100.0,  # +100% (max discharge)
-        native_step=0.1,
-        scale=0.1, # Modbus 1000 * 0.1 = 100.0%
+        native_step=1,
+        scale=0.1, # User 100% -> Modbus 1000 * 0.1Pn% = 100.0%
         mode=NumberMode.BOX, # BOX is better than slider
         signed=True,
+        round_native_value=True,
         force_user_mode_for_nonzero=True,
     ),
     PylontechNumberEntityDescription(
@@ -140,13 +142,19 @@ class PylontechNumber(CoordinatorEntity, NumberEntity):
         """Geef de huidige ingestelde waarde terug inclusief schaling."""
         raw_value = self.coordinator.data.get(self.entity_description.key)
         if raw_value is not None:
+            native_value = raw_value * self.entity_description.scale
+            if self.entity_description.round_native_value:
+                return round(native_value)
             # We ronden af op 1 decimaal om zwevende komma fouten (zoals 99.90000001) te voorkomen
-            return round(raw_value * self.entity_description.scale, 1)
+            return round(native_value, 1)
         return None
 
     async def async_set_native_value(self, value: float) -> None:
         """Dit wordt aangeroepen als je in Home Assistant de waarde aanpast."""
-        # Draai de schaling om voor de Modbus verzending (bijv -50.0 / 0.1 = -500)
+        if self.entity_description.round_native_value:
+            value = round(value)
+
+        # Draai de schaling om voor de Modbus verzending (bijv -50 / 0.1 = -500)
         raw_value = int(round(value / self.entity_description.scale))
 
         if (

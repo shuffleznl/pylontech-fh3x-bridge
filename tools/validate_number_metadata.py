@@ -69,9 +69,10 @@ def main() -> None:
     assert literal_kw(charge_ref, "register_address") == 40901
     assert literal_kw(charge_ref, "native_min_value") == -100.0
     assert literal_kw(charge_ref, "native_max_value") == 100.0
-    assert literal_kw(charge_ref, "native_step") == 0.1
+    assert literal_kw(charge_ref, "native_step") == 1
     assert literal_kw(charge_ref, "scale") == 0.1
     assert literal_kw(charge_ref, "signed") is True
+    assert literal_kw(charge_ref, "round_native_value") is True
 
     init = find_number_init(tree)
     attrs_before_super: set[str] = set()
