@@ -1,12 +1,12 @@
 {
-  "domain": "force_h3x_bridge",
-  "name": "Force H3X Bridge",
-  "codeowners": ["@shufflez", "@shuffleznl", "@openai"],
+  "domain": "pylontech_h3x_bridge",
+  "name": "Pylontech H3X Bridge",
+  "codeowners": ["@wietse108", "@shuffleznl", "@openai", "@codex"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/shuffleznl/force-h3x-bridge",
+  "documentation": "https://github.com/shuffleznl/pylontech-h3x-bridge",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/shuffleznl/force-h3x-bridge/issues",
+  "issue_tracker": "https://github.com/shuffleznl/pylontech-h3x-bridge/issues",
   "requirements": [],
   "version": "0.2.0"
 }
