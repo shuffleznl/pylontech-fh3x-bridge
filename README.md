@@ -1,6 +1,6 @@
-# Force H3X Bridge and Energy Arbitrage for Home Assistant
+# Pylontech Force H3X Bridge and Energy Arbitrage for Home Assistant
 
-This repository contains the HACS-installable **Force H3X Bridge** Home Assistant custom integration for a Pylontech Force H3X system.
+This repository contains the HACS-installable **Pylontech H3X Bridge** Home Assistant custom integration for a Pylontech Force H3X system.
 
 | Integration | Domain | Purpose |
 | --- | --- | --- |
@@ -8,11 +8,11 @@ This repository contains the HACS-installable **Force H3X Bridge** Home Assistan
 
 The Nord Pool arbitrage controller now lives in its own HACS repository: `https://github.com/shuffleznl/h3x-energy-arbitrage`. HACS integration repositories can only manage one integration under `custom_components/`, so Force H3X Bridge and the arbitrage controller are installed separately.
 
-Force H3X Bridge exposes the H3X sensors and writable Modbus controls needed by Home Assistant automations and external optimizers.
+Pylontech H3X Bridge exposes the H3X sensors and writable Modbus controls needed by Home Assistant automations and external optimizers.
 
 ## What It Controls
 
-Default entity IDs are based on a clean Force H3X Bridge install:
+Default entity IDs are based on a clean Pylontech H3X Bridge install:
 
 | Purpose | Default entity |
 | --- | --- |
