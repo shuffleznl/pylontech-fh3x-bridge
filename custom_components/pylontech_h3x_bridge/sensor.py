@@ -1,4 +1,4 @@
-"""Sensor platform for Force H3X Bridge."""
+"""Sensor platform for Pylontech H3X Bridge."""
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -258,7 +258,7 @@ async def async_setup_entry(
 
 
 class PylontechSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a Force H3X Bridge sensor."""
+    """Representation of a Pylontech H3X Bridge sensor."""
 
     _attr_has_entity_name = True
 

@@ -7,7 +7,7 @@ import ast
 from pathlib import Path
 
 
-NUMBER_PATH = Path("custom_components/force_h3x_bridge/number.py")
+NUMBER_PATH = Path("custom_components/pylontech_h3x_bridge/number.py")
 
 
 def literal_kw(call: ast.Call, name: str):

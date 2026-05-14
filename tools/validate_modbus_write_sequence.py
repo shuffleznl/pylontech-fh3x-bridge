@@ -25,12 +25,12 @@ def load_module(name: str, path: Path):
 
 
 protocol = load_module(
-    "force_h3x_protocol",
-    ROOT / "custom_components" / "force_h3x_bridge" / "protocol.py",
+    "pylontech_h3x_protocol",
+    ROOT / "custom_components" / "pylontech_h3x_bridge" / "protocol.py",
 )
 transport = load_module(
-    "force_h3x_transport",
-    ROOT / "custom_components" / "force_h3x_bridge" / "transport.py",
+    "pylontech_h3x_transport",
+    ROOT / "custom_components" / "pylontech_h3x_bridge" / "transport.py",
 )
 
 

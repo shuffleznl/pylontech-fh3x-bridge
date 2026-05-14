@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to Force H3X Bridge",
+        "title": "Connect to Pylontech H3X Bridge",
         "description": "Enter the Modbus TCP connection details of your inverter.",
         "data": {
           "host": "Host (IP Address)",
@@ -21,7 +21,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Update Force H3X Bridge connection",
+        "title": "Update Pylontech H3X Bridge connection",
         "description": "Update the Modbus TCP IP address and port. The integration reloads after saving.",
         "data": {
           "host": "Host (IP Address)",

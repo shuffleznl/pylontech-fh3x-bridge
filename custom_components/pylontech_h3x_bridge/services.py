@@ -1,4 +1,4 @@
-"""Home Assistant services for Force H3X Bridge."""
+"""Home Assistant services for Pylontech H3X Bridge."""
 from __future__ import annotations
 
 from datetime import timedelta
@@ -79,13 +79,13 @@ def _coordinator_from_call(hass: HomeAssistant, call: ServiceCall) -> PylontechC
     coordinator = coordinators.get(entry_id)
     if coordinator is None:
         raise HomeAssistantError(
-            f"Force H3X Bridge config entry {entry_id!r} is not loaded"
+            f"Pylontech H3X Bridge config entry {entry_id!r} is not loaded"
         )
     return coordinator
 
 
 async def async_setup_services(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register Force H3X Bridge services."""
+    """Register Pylontech H3X Bridge services."""
 
     async def force_charge_now(call: ServiceCall) -> ServiceResponse | None:
         coordinator = _coordinator_from_call(hass, call)

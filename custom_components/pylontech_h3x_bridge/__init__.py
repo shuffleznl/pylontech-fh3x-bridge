@@ -1,4 +1,4 @@
-"""The Force H3X Bridge integration."""
+"""The Pylontech H3X Bridge integration."""
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -16,13 +16,13 @@ PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.SELECT, 
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up Force H3X Bridge services."""
+    """Set up Pylontech H3X Bridge services."""
     hass.data.setdefault(DOMAIN, {})
     return await async_setup_services(hass, config)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Force H3X Bridge from a config entry."""
+    """Set up Pylontech H3X Bridge from a config entry."""
     hass.data.setdefault(DOMAIN, {})
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 

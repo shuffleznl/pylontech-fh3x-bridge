@@ -1,14 +1,14 @@
-# Force H3X Bridge
+# Pylontech H3X Bridge
 
-This workspace includes **Force H3X Bridge**, a renamed and patched Home Assistant custom integration for Pylontech Force H3X Modbus TCP.
+This workspace includes **Pylontech H3X Bridge**, a renamed and patched Home Assistant custom integration for Pylontech Force H3X Modbus TCP.
 
 ```text
-custom_components/force_h3x_bridge/
+custom_components/pylontech_h3x_bridge/
 ```
 
-It is based on `wietse108/HA-pylontech-force-H3X`, but uses its own domain (`force_h3x_bridge`) so it can be installed without conflicting with the original integration. The patch changes the Modbus write path for the manufacturer-documented EMS control registers.
+It is based on `wietse108/HA-pylontech-force-H3X`, but uses its own domain (`pylontech_h3x_bridge`) so it can be installed without conflicting with the original integration. The patch changes the Modbus write path for the manufacturer-documented EMS control registers.
 
-Repository metadata points to `https://github.com/shuffleznl/force-h3x-bridge`; code ownership is set to `@shufflez`, `@shuffleznl`, and `@openai`.
+Repository metadata points to `https://github.com/shuffleznl/pylontech-fh3x-bridge`; code ownership is set to `@shufflez`, `@shuffleznl`, and `@openai`.
 
 ## Manufacturer Register Findings
 
@@ -37,13 +37,13 @@ The document also states the device only supports Modbus TCP, default external L
 
    The manufacturer document says register `40901` must be set when EMS mode is active. The command path no longer trusts cached `ems_mode`; this is important because positive discharge can appear to work in other modes, while negative forced charge generally requires User mode.
 
-4. Successful writes reconnect the Modbus TCP socket and skip immediate forced refreshes.
+4. The raw Modbus TCP transport discards stale duplicate transaction frames and skips immediate forced refreshes.
 
-   Live H3X logs showed duplicate write responses arriving after the acknowledged write. Reconnecting discards stale frames, and the next scheduled poll confirms the final device state.
+   Live H3X logs showed duplicate write responses arriving after the acknowledged write. The transport waits for the matching transaction id and lets the next scheduled poll confirm the final device state.
 
 5. The integration now has an options flow for updating Modbus TCP host and port.
 
-   Go to **Settings > Devices & services > Force H3X Bridge > Configure** to change IP/port. The integration reloads after saving.
+   Go to **Settings > Devices & services > Pylontech H3X Bridge > Configure** to change IP/port. The integration reloads after saving.
 
 6. The default setup IP is now the manufacturer documented default `172.22.184.210`; default port remains `502`.
 
@@ -52,7 +52,7 @@ The document also states the device only supports Modbus TCP, default external L
 Copy this directory into Home Assistant:
 
 ```text
-custom_components/force_h3x_bridge
+custom_components/pylontech_h3x_bridge
 ```
 
 Then restart Home Assistant.
@@ -62,9 +62,9 @@ Because the domain is different, this integration can be installed next to the u
 After restart:
 
 1. Open **Settings > Devices & services**.
-2. Check **Force H3X Bridge** is loaded.
+2. Check **Pylontech H3X Bridge** is loaded.
 3. Use **Configure** to set or update IP/port.
-4. Test `number.force_h3x_bridge_charge_discharge_power_ref`:
+4. Test `number.pylontech_h3x_bridge_charge_discharge_power_ref`:
    - `-10` should request charging at `10%` of nominal inverter power.
    - `0` should stop forced charge/discharge reference.
    - `10` should request discharging at `10%`.

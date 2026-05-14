@@ -26,6 +26,6 @@ jobs:
       - name: Validate JSON
         run: |
           python -m json.tool hacs.json > /dev/null
-          python -m json.tool custom_components/force_h3x_bridge/manifest.json > /dev/null
-          python -m json.tool custom_components/force_h3x_bridge/strings.json > /dev/null
-          python -m json.tool custom_components/force_h3x_bridge/translations/en.json > /dev/null
+          python -m json.tool custom_components/pylontech_h3x_bridge/manifest.json > /dev/null
+          python -m json.tool custom_components/pylontech_h3x_bridge/strings.json > /dev/null
+          python -m json.tool custom_components/pylontech_h3x_bridge/translations/en.json > /dev/null

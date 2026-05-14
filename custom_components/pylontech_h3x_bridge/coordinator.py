@@ -1,4 +1,4 @@
-"""DataUpdateCoordinator for Force H3X Bridge."""
+"""DataUpdateCoordinator for Pylontech H3X Bridge."""
 import asyncio
 import logging
 import struct

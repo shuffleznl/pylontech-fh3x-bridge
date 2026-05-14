@@ -1,12 +1,12 @@
-# Pylontech Force H3X Bridge and Energy Arbitrage for Home Assistant
+# Pylontech H3X Bridge and Energy Arbitrage for Home Assistant
 
 This repository contains the HACS-installable **Pylontech H3X Bridge** Home Assistant custom integration for a Pylontech Force H3X system.
 
 | Integration | Domain | Purpose |
 | --- | --- | --- |
-| Force H3X Bridge | `force_h3x_bridge` | Local Modbus TCP bridge for Force H3X sensors and controls. |
+| Pylontech H3X Bridge | `pylontech_h3x_bridge` | Local Modbus TCP bridge for Force H3X sensors and controls. |
 
-The Nord Pool arbitrage controller now lives in its own HACS repository: `https://github.com/shuffleznl/h3x-energy-arbitrage`. HACS integration repositories can only manage one integration under `custom_components/`, so Force H3X Bridge and the arbitrage controller are installed separately.
+The Nord Pool arbitrage controller now lives in its own HACS repository: `https://github.com/shuffleznl/h3x-energy-arbitrage`. HACS integration repositories can only manage one integration under `custom_components/`, so Pylontech H3X Bridge and the arbitrage controller are installed separately.
 
 Pylontech H3X Bridge exposes the H3X sensors and writable Modbus controls needed by Home Assistant automations and external optimizers.
 
@@ -16,23 +16,23 @@ Default entity IDs are based on a clean Pylontech H3X Bridge install:
 
 | Purpose | Default entity |
 | --- | --- |
-| EMS mode | `select.force_h3x_bridge_ems_mode` |
-| Charge/discharge power | `number.force_h3x_bridge_charge_discharge_power_ref` |
-| Battery SOC | `sensor.force_h3x_bridge_battery_soc` |
-| House load | `sensor.force_h3x_bridge_load_power` |
-| BMS temperature | `sensor.force_h3x_bridge_bms_temperature` |
-| Charge SOC limit | `number.force_h3x_bridge_charge_limit_soc` |
-| Discharge SOC limit | `number.force_h3x_bridge_discharge_limit_soc_eps` |
+| EMS mode | `select.pylontech_h3x_bridge_ems_mode` |
+| Charge/discharge power | `number.pylontech_h3x_bridge_charge_discharge_power_ref` |
+| Battery SOC | `sensor.pylontech_h3x_bridge_battery_soc` |
+| House load | `sensor.pylontech_h3x_bridge_load_power` |
+| BMS temperature | `sensor.pylontech_h3x_bridge_bms_temperature` |
+| Charge SOC limit | `number.pylontech_h3x_bridge_charge_limit_soc` |
+| Discharge SOC limit | `number.pylontech_h3x_bridge_discharge_limit_soc_eps` |
 
 The H3X integration writes Modbus register `40907` for EMS mode and `40901` for the signed charge/discharge power reference. It must be in `User mode` while forcing charge or discharge.
 
 ## HACS Installation
 
-1. In HACS, add `https://github.com/shuffleznl/force-h3x-bridge` as a custom repository of type **Integration**.
-2. Install **Force H3X Bridge**.
+1. In HACS, add `https://github.com/shuffleznl/pylontech-fh3x-bridge` as a custom repository of type **Integration**.
+2. Install **Pylontech H3X Bridge**.
 3. Restart Home Assistant.
 4. Go to **Settings > Devices & services > Add integration**.
-5. Add **Force H3X Bridge** and enter the Modbus TCP IP/port.
+5. Add **Pylontech H3X Bridge** and enter the Modbus TCP IP/port.
 
 ## Optional Energy Dashboard
 
@@ -48,30 +48,30 @@ The price and decision cards require the optional `h3x-energy-arbitrage` HACS in
 
 ## Manual Installation
 
-1. Copy `custom_components/force_h3x_bridge` into your Home Assistant `config/custom_components/` directory.
+1. Copy `custom_components/pylontech_h3x_bridge` into your Home Assistant `config/custom_components/` directory.
 2. Restart Home Assistant.
 3. Go to **Settings > Devices & services > Add integration**.
-4. Add **Force H3X Bridge** and enter the Modbus TCP IP/port.
+4. Add **Pylontech H3X Bridge** and enter the Modbus TCP IP/port.
 
 ## Operational Notes
 
 - Register `40901` is written as signed `S16`: negative values charge, positive values discharge.
 - Home Assistant exposes `40901` as whole percent values from `-100` to `100`; the integration converts that to the raw Modbus `0.1Pn%` signed integer.
 - The integration always sets EMS mode `40907` to `4` (`User mode`) before nonzero charge/discharge power writes.
-- The v0.2 branch uses a small raw Modbus TCP transport instead of PyModbus. Requests stay serialized on one socket, and late duplicate ACK frames are discarded until the matching transaction id is received.
+- The integration uses a small raw Modbus TCP transport instead of PyModbus. Requests stay serialized on one socket, and late duplicate ACK frames are discarded until the matching transaction id is received.
 - The integration performs its own locked write retries and keeps confirmation reads on the normal polling cycle.
-- IP and port can be changed later from **Settings > Devices & services > Force H3X Bridge > Configure**.
-- Keep only one Modbus client connected to the inverter. Disable the original `pylon_fh3x` integration and other polling tools for the same H3X while using Force H3X Bridge; concurrent TCP sessions can desynchronize Modbus transaction IDs.
+- IP and port can be changed later from **Settings > Devices & services > Pylontech H3X Bridge > Configure**.
+- Keep only one Modbus client connected to the inverter. Disable the original `pylon_fh3x` integration and other polling tools for the same H3X while using Pylontech H3X Bridge; concurrent TCP sessions can desynchronize Modbus transaction IDs.
 
-## v0.2 Time-Slot Services
+## Time-Slot Services
 
-Version `0.2.0` adds service-based control using the manufacturer time-slot registers. These services are intended for controlled testing:
+Version `0.3.0` keeps the service-based control using the manufacturer time-slot registers and renames the Home Assistant domain to `pylontech_h3x_bridge`. These services are intended for controlled testing:
 
 | Service | Purpose |
 | --- | --- |
-| `force_h3x_bridge.force_charge_now` | Program a temporary charge slot, default slot `4`, default EMS mode `pn_customer` (`40907 = 5`). |
-| `force_h3x_bridge.test_force_charge_modes` | Program the same temporary charge slot first with EMS mode `5`, then with EMS mode `4`, and return measured snapshots. |
-| `force_h3x_bridge.clear_time_slot` | Disable one time slot. |
+| `pylontech_h3x_bridge.force_charge_now` | Program a temporary charge slot, default slot `4`, default EMS mode `pn_customer` (`40907 = 5`). |
+| `pylontech_h3x_bridge.test_force_charge_modes` | Program the same temporary charge slot first with EMS mode `5`, then with EMS mode `4`, and return measured snapshots. |
+| `pylontech_h3x_bridge.clear_time_slot` | Disable one time slot. |
 
 The slot command writes `40908-40931` style registers: disable slot, optionally sync inverter clock (`40932-40935`), write start/end/mode/power/weekday, set EMS mode, then enable the slot.
 
@@ -79,7 +79,7 @@ The slot command writes `40908-40931` style registers: disable slot, optionally 
 
 ```text
 custom_components/
-  force_h3x_bridge/
+  pylontech_h3x_bridge/
     __init__.py
     config_flow.py
     const.py

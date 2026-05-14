@@ -3,7 +3,7 @@
 
 This is intentionally small and dependency-free so it can be used before a
 Home Assistant/HACS release. It implements enough holding-register behavior for
-Force H3X Bridge development:
+Pylontech H3X Bridge development:
 
 - function 3: read holding registers
 - function 6: write single register

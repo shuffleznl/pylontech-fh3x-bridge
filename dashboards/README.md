@@ -9,11 +9,11 @@ It shows:
 - planned charge/discharge slots,
 - estimated arbitrage value for today and for the active horizon,
 - battery power and state-of-charge over time,
-- Force H3X Bridge controls and diagnostics.
+- Pylontech H3X Bridge controls and diagnostics.
 
 ## Requirements
 
-1. Install this repository through HACS for `force_h3x_bridge`.
+1. Install this repository through HACS for `pylontech_h3x_bridge`.
 2. Install the optional `https://github.com/shuffleznl/h3x-energy-arbitrage` custom repository through HACS if you want the price/decision/savings cards to populate.
 3. Install `apexcharts-card` from HACS for the richer charts.
 
@@ -47,7 +47,7 @@ Restart Home Assistant or reload Lovelace resources after installing `apexcharts
 
 The dashboard assumes the default entity IDs created by:
 
-- `force_h3x_bridge`
+- `pylontech_h3x_bridge`
 - `h3x_energy_arbitrage`
 
 If Home Assistant adds suffixes such as `_2`, edit the dashboard YAML and replace the entity IDs.

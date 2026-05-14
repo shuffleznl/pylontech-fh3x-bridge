@@ -1,4 +1,4 @@
-"""Switch platform for Force H3X Bridge."""
+"""Switch platform for Pylontech H3X Bridge."""
 from dataclasses import dataclass
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription

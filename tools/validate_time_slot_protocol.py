@@ -10,12 +10,14 @@ import importlib.util
 import sys
 
 
-PROTOCOL_PATH = Path("custom_components/force_h3x_bridge/protocol.py")
-COORDINATOR_PATH = Path("custom_components/force_h3x_bridge/coordinator.py")
+PROTOCOL_PATH = Path("custom_components/pylontech_h3x_bridge/protocol.py")
+COORDINATOR_PATH = Path("custom_components/pylontech_h3x_bridge/coordinator.py")
 
 
 def load_protocol():
-    spec = importlib.util.spec_from_file_location("force_h3x_protocol", PROTOCOL_PATH)
+    spec = importlib.util.spec_from_file_location(
+        "pylontech_h3x_protocol", PROTOCOL_PATH
+    )
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     sys.modules[spec.name] = module

@@ -7,7 +7,7 @@ import ast
 from pathlib import Path
 
 
-COORDINATOR_PATH = Path("custom_components/force_h3x_bridge/coordinator.py")
+COORDINATOR_PATH = Path("custom_components/pylontech_h3x_bridge/coordinator.py")
 
 
 def find_method(tree: ast.AST, class_name: str, method_name: str) -> ast.AsyncFunctionDef:

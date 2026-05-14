@@ -1,4 +1,4 @@
-"""Number platform for Force H3X Bridge."""
+"""Number platform for Pylontech H3X Bridge."""
 from dataclasses import dataclass
 
 from homeassistant.components.number import (

@@ -37,15 +37,15 @@ views:
             name: Target power
             icon: mdi:transmission-tower-export
           - type: tile
-            entity: sensor.force_h3x_bridge_battery_soc
+            entity: sensor.pylontech_h3x_bridge_battery_soc
             name: Battery SOC
             icon: mdi:battery
           - type: tile
-            entity: sensor.force_h3x_bridge_battery_power
+            entity: sensor.pylontech_h3x_bridge_battery_power
             name: Battery power
             icon: mdi:battery-charging
           - type: tile
-            entity: sensor.force_h3x_bridge_load_power
+            entity: sensor.pylontech_h3x_bridge_load_power
             name: House load
             icon: mdi:home-lightning-bolt
 
@@ -185,7 +185,7 @@ views:
           tooltip:
             shared: true
         series:
-          - entity: sensor.force_h3x_bridge_battery_power
+          - entity: sensor.pylontech_h3x_bridge_battery_power
             name: Battery power
             yaxis_id: power
             type: area
@@ -195,7 +195,7 @@ views:
             group_by:
               func: avg
               duration: 5min
-          - entity: sensor.force_h3x_bridge_battery_soc
+          - entity: sensor.pylontech_h3x_bridge_battery_soc
             name: SOC
             yaxis_id: soc
             type: line
@@ -208,31 +208,31 @@ views:
         title: Battery power history
         hours_to_show: 24
         entities:
-          - entity: sensor.force_h3x_bridge_battery_power
+          - entity: sensor.pylontech_h3x_bridge_battery_power
             name: Battery power
 
       - type: history-graph
         title: Battery SOC history
         hours_to_show: 24
         entities:
-          - entity: sensor.force_h3x_bridge_battery_soc
+          - entity: sensor.pylontech_h3x_bridge_battery_soc
             name: Battery SOC
 
       - type: entities
         title: Force H3X controls
         show_header_toggle: false
         entities:
-          - entity: select.force_h3x_bridge_ems_mode
+          - entity: select.pylontech_h3x_bridge_ems_mode
             name: EMS mode
-          - entity: number.force_h3x_bridge_charge_discharge_power_ref
+          - entity: number.pylontech_h3x_bridge_charge_discharge_power_ref
             name: Charge/discharge reference
-          - entity: number.force_h3x_bridge_charge_limit_soc
+          - entity: number.pylontech_h3x_bridge_charge_limit_soc
             name: Charge limit SOC
-          - entity: number.force_h3x_bridge_discharge_limit_soc_eps
+          - entity: number.pylontech_h3x_bridge_discharge_limit_soc_eps
             name: Discharge limit SOC
-          - entity: sensor.force_h3x_bridge_bms_temperature
+          - entity: sensor.pylontech_h3x_bridge_bms_temperature
             name: BMS temperature
-          - entity: sensor.force_h3x_bridge_bms_soh
+          - entity: sensor.pylontech_h3x_bridge_bms_soh
             name: BMS SOH
 
       - type: entities

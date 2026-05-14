@@ -1,4 +1,4 @@
-"""Config flow for Force H3X Bridge."""
+"""Config flow for Pylontech H3X Bridge."""
 import logging
 from typing import Any
 
@@ -42,7 +42,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Force H3X Bridge."""
+    """Handle a config flow for Pylontech H3X Bridge."""
 
     VERSION = 1
 
