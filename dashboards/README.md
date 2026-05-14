@@ -14,7 +14,7 @@ It shows:
 ## Requirements
 
 1. Install this repository through HACS for `force_h3x_bridge`.
-2. Manually install the optional `extras/h3x_energy_arbitrage` integration if you want the price/decision/savings cards to populate.
+2. Install the optional `https://github.com/shuffleznl/h3x-energy-arbitrage` custom repository through HACS if you want the price/decision/savings cards to populate.
 3. Install `apexcharts-card` from HACS for the richer charts.
 
 The dashboard also includes built-in `history-graph` cards for battery power and SOC, so those trends still display without ApexCharts.

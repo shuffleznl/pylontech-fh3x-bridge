@@ -6,7 +6,7 @@ This repository contains the HACS-installable **Force H3X Bridge** Home Assistan
 | --- | --- | --- |
 | Force H3X Bridge | `force_h3x_bridge` | Local Modbus TCP bridge for Force H3X sensors and controls. |
 
-The Nord Pool arbitrage controller from the initial prototype is kept in `extras/h3x_energy_arbitrage` and should be split into its own HACS repository before installing through HACS. HACS integration repositories can only manage one integration under `custom_components/`.
+The Nord Pool arbitrage controller now lives in its own HACS repository: `https://github.com/shuffleznl/h3x-energy-arbitrage`. HACS integration repositories can only manage one integration under `custom_components/`, so Force H3X Bridge and the arbitrage controller are installed separately.
 
 Force H3X Bridge exposes the H3X sensors and writable Modbus controls needed by Home Assistant automations and external optimizers.
 
@@ -44,7 +44,7 @@ dashboards/force-h3x-energy.yaml
 
 It shows dynamic prices, current arbitrage decisions, planned charge/discharge slots, estimated value, battery power, and battery SOC. See [dashboards/README.md](dashboards/README.md) for installation.
 
-The price and decision cards require the optional `extras/h3x_energy_arbitrage` integration. The rich charts use `apexcharts-card` from HACS; built-in history cards are included for battery power and SOC.
+The price and decision cards require the optional `h3x-energy-arbitrage` HACS integration. The rich charts use `apexcharts-card` from HACS; built-in history cards are included for battery power and SOC.
 
 ## Manual Installation
 
@@ -89,13 +89,4 @@ custom_components/
     select.py
     sensor.py
     switch.py
-extras/
-  h3x_energy_arbitrage/
-    __init__.py
-    config_flow.py
-    const.py
-    coordinator.py
-    manifest.json
-    sensor.py
-    translations/en.json
 ```
