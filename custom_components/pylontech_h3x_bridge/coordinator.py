@@ -31,6 +31,23 @@ MODBUS_WRITE_ATTEMPTS = 3
 BMS_ESS_BASE_ADDRESS = 0x1400
 BMS_MODULE_NUMBER_OFFSET = 0x0036
 REGISTER_BMS_MODULE_NUMBER = BMS_ESS_BASE_ADDRESS + BMS_MODULE_NUMBER_OFFSET
+FORCE_H3_USABLE_DOD = 0.95
+FORCE_H3_SYSTEM_CAPACITY_KWH = {
+    2: 10.24,
+    3: 15.36,
+    4: 20.48,
+    5: 25.60,
+    6: 30.72,
+    7: 35.84,
+}
+FORCE_H3_USABLE_CAPACITY_KWH = {
+    2: 9.69,
+    3: 14.73,
+    4: 19.48,
+    5: 24.32,
+    6: 29.17,
+    7: 34.01,
+}
 
 # =========================================================
 # Helper functions for Modbus decoding
@@ -46,6 +63,24 @@ def get_32bit_int(regs, idx):
 
 def get_32bit_float(regs, idx):
     return struct.unpack('>f', struct.pack('>HH', regs[idx], regs[idx+1]))[0]
+
+
+def force_h3_capacity_for_modules(module_count: int) -> dict[str, float] | None:
+    """Return datasheet capacity values for a valid Force H3 module count."""
+    system_capacity = FORCE_H3_SYSTEM_CAPACITY_KWH.get(module_count)
+    usable_capacity = FORCE_H3_USABLE_CAPACITY_KWH.get(module_count)
+    if system_capacity is None or usable_capacity is None:
+        return None
+    theoretical_usable = round(system_capacity * FORCE_H3_USABLE_DOD, 2)
+    usable_deviation_pct = (
+        abs(usable_capacity - theoretical_usable) / theoretical_usable * 100
+    )
+    return {
+        "battery_system_capacity": system_capacity,
+        "battery_usable_capacity": usable_capacity,
+        "battery_usable_capacity_theoretical": theoretical_usable,
+        "battery_usable_capacity_deviation_pct": round(usable_deviation_pct, 2),
+    }
 
 
 class PylontechCoordinator(DataUpdateCoordinator):
@@ -304,7 +339,11 @@ class PylontechCoordinator(DataUpdateCoordinator):
                 REGISTER_BMS_MODULE_NUMBER, 1, 1, optional=True
             )
             if r_bms_modules:
-                data["battery_module_count"] = get_16bit_uint(r_bms_modules, 0)
+                module_count = get_16bit_uint(r_bms_modules, 0)
+                data["battery_module_count"] = module_count
+                capacity = force_h3_capacity_for_modules(module_count)
+                if capacity:
+                    data.update(capacity)
 
             
             if not data:

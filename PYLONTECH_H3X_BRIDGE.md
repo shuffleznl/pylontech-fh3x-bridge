@@ -52,6 +52,15 @@ The document also states the device only supports Modbus TCP, default external L
 
    This lets the arbitrage integration derive Force H3 capacity from the actual number of stacked modules instead of relying on a manually entered kWh value.
 
+8. The bridge derives datasheet capacity sensors from that module count:
+
+   - `sensor.pylontech_h3x_bridge_battery_system_capacity`
+   - `sensor.pylontech_h3x_bridge_battery_usable_capacity`
+   - `sensor.pylontech_h3x_bridge_battery_usable_capacity_theoretical`
+   - `sensor.pylontech_h3x_bridge_battery_usable_capacity_deviation`
+
+   The theoretical usable capacity is `Battery System Capacity * 95% depth of discharge`. The datasheet usable value must stay within roughly 5% of that theoretical value.
+
 ## Deployment
 
 Copy this directory into Home Assistant:
