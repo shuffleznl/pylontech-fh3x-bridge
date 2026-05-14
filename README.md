@@ -20,6 +20,7 @@ Default entity IDs are based on a clean Pylontech H3X Bridge install:
 | Charge/discharge power | `number.pylontech_h3x_bridge_charge_discharge_power_ref` |
 | Battery SOC | `sensor.pylontech_h3x_bridge_battery_soc` |
 | House load | `sensor.pylontech_h3x_bridge_load_power` |
+| Battery module count | `sensor.pylontech_h3x_bridge_battery_module_count` |
 | BMS temperature | `sensor.pylontech_h3x_bridge_bms_temperature` |
 | Charge SOC limit | `number.pylontech_h3x_bridge_charge_limit_soc` |
 | Discharge SOC limit | `number.pylontech_h3x_bridge_discharge_limit_soc_eps` |
@@ -60,6 +61,7 @@ The price and decision cards require the optional `h3x-energy-arbitrage` HACS in
 - The integration always sets EMS mode `40907` to `4` (`User mode`) before nonzero charge/discharge power writes.
 - The integration uses a small raw Modbus TCP transport instead of PyModbus. Requests stay serialized on one socket, and late duplicate ACK frames are discarded until the matching transaction id is received.
 - The integration performs its own locked write retries and keeps confirmation reads on the normal polling cycle.
+- The BMS module count is read from ESS register `0x1436` / decimal `5174`, calculated as ESS base `0x1400` plus offset `0x0036` ("Module number in series").
 - IP and port can be changed later from **Settings > Devices & services > Pylontech H3X Bridge > Configure**.
 - Keep only one Modbus client connected to the inverter. Disable the original `pylon_fh3x` integration and other polling tools for the same H3X while using Pylontech H3X Bridge; concurrent TCP sessions can desynchronize Modbus transaction IDs.
 

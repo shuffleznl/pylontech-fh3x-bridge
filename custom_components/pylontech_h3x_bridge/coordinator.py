@@ -28,6 +28,9 @@ _LOGGER = logging.getLogger(__name__)
 
 MODBUS_RECONNECT_SETTLE_SECONDS = 0.75
 MODBUS_WRITE_ATTEMPTS = 3
+BMS_ESS_BASE_ADDRESS = 0x1400
+BMS_MODULE_NUMBER_OFFSET = 0x0036
+REGISTER_BMS_MODULE_NUMBER = BMS_ESS_BASE_ADDRESS + BMS_MODULE_NUMBER_OFFSET
 
 # =========================================================
 # Helper functions for Modbus decoding
@@ -295,6 +298,13 @@ class PylontechCoordinator(DataUpdateCoordinator):
             # BMS SOH (5152 / 0x1420)
             r_bms_soh = await self.safe_read(5152, 1, 1)
             if r_bms_soh: data["bms_soh"] = get_16bit_uint(r_bms_soh, 0)
+
+            # BMS module count (5174 / 0x1436)
+            r_bms_modules = await self.safe_read(
+                REGISTER_BMS_MODULE_NUMBER, 1, 1, optional=True
+            )
+            if r_bms_modules:
+                data["battery_module_count"] = get_16bit_uint(r_bms_modules, 0)
 
             
             if not data:

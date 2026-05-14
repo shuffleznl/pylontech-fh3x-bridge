@@ -20,6 +20,7 @@ From `ModBus-Protocol-Pylon-FH3X-V1.2_20250811.docx`:
 | `40902` | `9FC6` | `U16`, `%` | Charge limit SOC | `50-100` |
 | `40903` | `9FC7` | `U16`, `%` | EPS/discharge limit SOC | `5-100` |
 | `40907` | `9FCB` | `U16` | EMS mode | `4 = User mode`, `5 = PN-Customer mode` |
+| `5174` | `1436` | `U16` | Battery module count | ESS base `0x1400` + offset `0x0036` |
 
 The document also states the device only supports Modbus TCP, default external LAN IP is `172.22.184.210`, and port is `502`.
 
@@ -46,6 +47,10 @@ The document also states the device only supports Modbus TCP, default external L
    Go to **Settings > Devices & services > Pylontech H3X Bridge > Configure** to change IP/port. The integration reloads after saving.
 
 6. The default setup IP is now the manufacturer documented default `172.22.184.210`; default port remains `502`.
+
+7. The bridge exposes `sensor.pylontech_h3x_bridge_battery_module_count` from BMS/ESS register `5174`.
+
+   This lets the arbitrage integration derive Force H3 capacity from the actual number of stacked modules instead of relying on a manually entered kWh value.
 
 ## Deployment
 

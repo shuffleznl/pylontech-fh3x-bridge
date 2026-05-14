@@ -211,6 +211,12 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         icon="mdi:battery-sync",
     ),
     SensorEntityDescription(
+        key="battery_module_count",
+        name="Battery Module Count",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-stack",
+    ),
+    SensorEntityDescription(
         key="bms_cell_voltage_max", name="BMS Cell Voltage Max",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
