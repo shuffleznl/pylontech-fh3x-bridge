@@ -1,0 +1,362 @@
+title: Pylontech H3X Energy
+views:
+  - title: Energy
+    path: pylontech-h3x-energy
+    icon: mdi:battery-charging-70
+    cards:
+      - type: markdown
+        title: Pylontech H3X Energy
+        content: |
+          {% set plan_entity = 'sensor.pylontech_h3x_energy_arbitrage_price_plan' %}
+          {% set decision = states('sensor.pylontech_h3x_energy_arbitrage_decision') %}
+          {% set reason = states('sensor.pylontech_h3x_energy_arbitrage_decision_reason') %}
+          {% set price = states('sensor.pylontech_h3x_energy_arbitrage_current_price') %}
+          {% set value = states('sensor.pylontech_h3x_energy_arbitrage_estimated_savings') %}
+          {% set currency = state_attr(plan_entity, 'currency') or 'EUR' %}
+
+          **Decision:** {{ decision if decision not in ['unknown', 'unavailable', 'none', 'None', ''] else 'waiting for optimizer data' }}
+
+          **Reason:** {{ reason if reason not in ['unknown', 'unavailable', 'none', 'None', ''] else 'not available yet' }}
+
+          **Current price:** {% if price not in ['unknown', 'unavailable', 'none', 'None', ''] %}{{ price }} {{ currency }}/kWh{% else %}waiting for Nord Pool price data{% endif %}
+
+          **Estimated value:** {% if value not in ['unknown', 'unavailable', 'none', 'None', ''] %}{{ value }} {{ currency }} over the active optimization horizon.{% else %}waiting for price, SOC, and capacity data{% endif %}
+
+      - type: grid
+        title: Current state
+        columns: 3
+        square: false
+        cards:
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_current_price
+            name: Current price
+            icon: mdi:cash-clock
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_price_trend
+            name: Price trend
+            icon: mdi:trending-up
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_decision
+            name: Decision
+            icon: mdi:state-machine
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_target_power
+            name: Target power
+            icon: mdi:transmission-tower-export
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_target_c_rate
+            name: Target C-rate
+            icon: mdi:speedometer
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_price_resolution
+            name: Price resolution
+            icon: mdi:clock-outline
+          - type: tile
+            entity: sensor.pylontech_h3x_bridge_battery_soc
+            name: Battery SOC
+            icon: mdi:battery
+          - type: tile
+            entity: sensor.pylontech_h3x_bridge_battery_power
+            name: Battery power
+            icon: mdi:battery-charging
+          - type: tile
+            entity: sensor.pylontech_h3x_bridge_load_power
+            name: House load
+            icon: mdi:home-lightning-bolt
+
+      - type: grid
+        title: Estimated arbitrage value
+        columns: 3
+        square: false
+        cards:
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_estimated_savings
+            name: Horizon value
+            icon: mdi:cash-multiple
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_estimated_savings_today
+            name: Today's value
+            icon: mdi:cash-clock
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_first_slot_value
+            name: Current slot value
+            icon: mdi:clock-fast
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_planned_charge_energy
+            name: Planned charge
+            icon: mdi:battery-plus
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_planned_discharge_energy
+            name: Planned discharge
+            icon: mdi:battery-minus
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_price_slots_available
+            name: Price slots
+            icon: mdi:calendar-clock
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_battery_system_capacity
+            name: System capacity
+            icon: mdi:battery-high
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_battery_usable_capacity
+            name: Usable capacity
+            icon: mdi:battery-check
+
+      - type: markdown
+        title: Next planned slots
+        content: |
+          {% set plan_entity = 'sensor.pylontech_h3x_energy_arbitrage_price_plan' %}
+          {% set currency = state_attr(plan_entity, 'currency') or 'EUR' %}
+
+          | Slot | State/start | Price | Power | Energy | Est. value |
+          |---|---|---:|---:|---:|---:|
+          {% for item in [
+            ('Charge', 'sensor.pylontech_h3x_energy_arbitrage_next_charge_slot'),
+            ('Discharge', 'sensor.pylontech_h3x_energy_arbitrage_next_discharge_slot'),
+            ('Full charge', 'sensor.pylontech_h3x_energy_arbitrage_periodic_full_charge_slot')
+          ] %}
+          {% set entity_id = item[1] %}
+          {% set state = states(entity_id) %}
+          {% set price = state_attr(entity_id, 'price') %}
+          {% set power_w = state_attr(entity_id, 'target_power_w') %}
+          {% set energy = state_attr(entity_id, 'energy_kwh') %}
+          {% set value = state_attr(entity_id, 'value') %}
+          | {{ item[0] }} | {{ state if state not in ['unknown', 'unavailable', 'none', 'None', ''] else 'not planned' }} | {% if price is not none %}{{ (price | float(0)) | round(3) }} {{ currency }}/kWh{% else %}-{% endif %} | {% if power_w is not none %}{{ (power_w | float(0) / 1000) | round(1) }} kW{% else %}-{% endif %} | {% if energy is not none %}{{ (energy | float(0)) | round(2) }} kWh{% else %}-{% endif %} | {% if value is not none %}{{ (value | float(0)) | round(2) }} {{ currency }}{% else %}-{% endif %} |
+          {% endfor %}
+
+          {% set plan = state_attr(plan_entity, 'dispatch_plan') or [] %}
+          {% if plan | count > 0 %}
+          Showing {{ [plan | count, 16] | min }} of {{ plan | count }} detailed dispatch slots:
+
+          | Start | End | Price | Action | kW | Est. value |
+          |---|---|---:|---|---:|---:|
+          {% for slot in plan[:16] %}
+          | {{ slot.start | default('-') }} | {{ slot.end | default('-') }} | {{ ((slot.price | default(0)) | float(0)) | round(3) }} {{ currency }}/kWh | {{ slot.action | default('-') }} | {{ ((slot.target_power_w | default(0)) | float(0) / 1000) | round(1) }} | {{ ((slot.value | default(0)) | float(0)) | round(2) }} {{ currency }} |
+          {% endfor %}
+          {% else %}
+          No detailed dispatch rows are available yet. Check the decision reason, Nord Pool price slots, SOC, and battery capacity sensors.
+          {% endif %}
+
+      - type: custom:apexcharts-card
+        graph_span: 36h
+        span:
+          start: hour
+        now:
+          show: true
+          label: Now
+        header:
+          show: true
+          title: Dynamic price and dispatch plan
+          show_states: true
+          colorize_states: true
+        yaxis:
+          - id: price
+            decimals: 3
+            apex_config:
+              title:
+                text: Price/kWh
+          - id: power
+            opposite: true
+            decimals: 1
+            apex_config:
+              title:
+                text: kW
+        apex_config:
+          chart:
+            height: 360
+          stroke:
+            width: 2
+          tooltip:
+            shared: true
+          legend:
+            show: true
+        series:
+          - entity: sensor.pylontech_h3x_energy_arbitrage_price_plan
+            name: Price
+            yaxis_id: price
+            type: line
+            curve: stepline
+            color: "#1f77b4"
+            data_generator: |
+              const slots = entity.attributes.price_slots || [];
+              return slots.flatMap((slot) => {
+                const start = new Date(slot.start).getTime();
+                const end = new Date(slot.end).getTime();
+                const price = Number(slot.price);
+                if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(price)) return [];
+                return [[start, price], [end, price]];
+              });
+          - entity: sensor.pylontech_h3x_energy_arbitrage_price_plan
+            name: Trend
+            yaxis_id: price
+            type: line
+            curve: smooth
+            color: "#d62728"
+            data_generator: |
+              const trend = entity.attributes.price_trend || [];
+              return trend.map((slot) => {
+                const start = new Date(slot.start).getTime();
+                const price = Number(slot.trend_price);
+                if (!Number.isFinite(start) || !Number.isFinite(price)) return null;
+                return [start, price];
+              }).filter(Boolean);
+          - entity: sensor.pylontech_h3x_energy_arbitrage_price_plan
+            name: Planned dispatch
+            yaxis_id: power
+            type: area
+            curve: stepline
+            color: "#2ca02c"
+            opacity: 0.25
+            data_generator: |
+              const plan = entity.attributes.dispatch_plan || [];
+              return plan.flatMap((slot) => {
+                const start = new Date(slot.start).getTime();
+                const end = new Date(slot.end).getTime();
+                const kw = Number(slot.target_power_w || 0) / 1000;
+                if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(kw)) return [];
+                const signedKw = slot.action === "charge" ? -kw : kw;
+                return [[start, signedKw], [end, signedKw]];
+              });
+
+      - type: custom:apexcharts-card
+        graph_span: 24h
+        header:
+          show: true
+          title: Battery power and SOC
+          show_states: true
+          colorize_states: true
+        yaxis:
+          - id: power
+            decimals: 1
+            apex_config:
+              title:
+                text: kW
+          - id: soc
+            opposite: true
+            min: 0
+            max: 100
+            decimals: 0
+            apex_config:
+              title:
+                text: SOC %
+        apex_config:
+          chart:
+            height: 340
+          tooltip:
+            shared: true
+        series:
+          - entity: sensor.pylontech_h3x_bridge_battery_power
+            name: Battery power
+            yaxis_id: power
+            type: area
+            color: "#ff7f0e"
+            opacity: 0.2
+            transform: return Number(x) / 1000;
+            group_by:
+              func: avg
+              duration: 5min
+          - entity: sensor.pylontech_h3x_bridge_battery_soc
+            name: SOC
+            yaxis_id: soc
+            type: line
+            color: "#9467bd"
+            group_by:
+              func: avg
+              duration: 5min
+
+      - type: history-graph
+        title: Battery power history
+        hours_to_show: 24
+        entities:
+          - entity: sensor.pylontech_h3x_bridge_battery_power
+            name: Battery power
+
+      - type: history-graph
+        title: Battery SOC history
+        hours_to_show: 24
+        entities:
+          - entity: sensor.pylontech_h3x_bridge_battery_soc
+            name: Battery SOC
+
+      - type: entities
+        title: Pylontech H3X controls
+        show_header_toggle: false
+        entities:
+          - entity: select.pylontech_h3x_bridge_ems_mode
+            name: EMS mode
+          - entity: number.pylontech_h3x_bridge_charge_discharge_power_ref
+            name: Charge/discharge reference
+          - entity: number.pylontech_h3x_bridge_charge_limit_soc
+            name: Charge limit SOC
+          - entity: number.pylontech_h3x_bridge_discharge_limit_soc_eps
+            name: Discharge limit SOC
+          - entity: sensor.pylontech_h3x_bridge_battery_module_count
+            name: Battery modules
+          - entity: sensor.pylontech_h3x_bridge_battery_system_capacity
+            name: Bridge system capacity
+          - entity: sensor.pylontech_h3x_bridge_battery_usable_capacity
+            name: Bridge usable capacity
+          - entity: sensor.pylontech_h3x_bridge_bms_temperature
+            name: BMS temperature
+          - entity: sensor.pylontech_h3x_bridge_bms_soh
+            name: BMS SOH
+
+      - type: entities
+        title: Arbitrage controls
+        show_header_toggle: false
+        entities:
+          - entity: select.pylontech_h3x_energy_arbitrage_strategy_profile
+            name: Strategy profile
+          - entity: select.pylontech_h3x_energy_arbitrage_end_of_horizon_soc
+            name: End-of-horizon SOC
+          - entity: select.pylontech_h3x_energy_arbitrage_discharge_power_mode
+            name: Discharge power mode
+          - entity: switch.pylontech_h3x_energy_arbitrage_periodic_full_charge
+            name: Periodic full charge
+          - entity: number.pylontech_h3x_energy_arbitrage_periodic_full_charge_interval
+            name: Full-charge interval
+          - entity: number.pylontech_h3x_energy_arbitrage_periodic_full_charge_target_soc
+            name: Full-charge target SOC
+          - entity: number.pylontech_h3x_energy_arbitrage_periodic_full_charge_threshold_soc
+            name: Full-charge threshold SOC
+          - entity: number.pylontech_h3x_energy_arbitrage_discharge_spread_price_tolerance
+            name: Discharge spread tolerance
+          - entity: number.pylontech_h3x_energy_arbitrage_discharge_spread_maximum_window
+            name: Discharge spread window
+          - entity: number.pylontech_h3x_energy_arbitrage_maximum_charge_c_rate
+            name: Maximum charge C-rate
+          - entity: number.pylontech_h3x_energy_arbitrage_maximum_discharge_c_rate
+            name: Maximum discharge C-rate
+
+      - type: entities
+        title: Arbitrage diagnostics
+        show_header_toggle: false
+        entities:
+          - entity: sensor.pylontech_h3x_energy_arbitrage_decision_reason
+            name: Decision reason
+          - entity: sensor.pylontech_h3x_energy_arbitrage_next_charge_slot
+            name: Next charge slot
+          - entity: sensor.pylontech_h3x_energy_arbitrage_next_discharge_slot
+            name: Next discharge slot
+          - entity: sensor.pylontech_h3x_energy_arbitrage_periodic_full_charge_slot
+            name: Periodic full-charge slot
+          - entity: sensor.pylontech_h3x_energy_arbitrage_price_resolution
+            name: Price resolution
+          - entity: sensor.pylontech_h3x_energy_arbitrage_price_slots_available
+            name: Available slots
+          - type: attribute
+            entity: sensor.pylontech_h3x_energy_arbitrage_decision
+            attribute: next_slot_start
+            name: Current slot start
+          - type: attribute
+            entity: sensor.pylontech_h3x_energy_arbitrage_decision
+            attribute: next_slot_end
+            name: Current slot end
+          - type: attribute
+            entity: sensor.pylontech_h3x_energy_arbitrage_decision
+            attribute: updated_at
+            name: Optimizer updated
+          - type: attribute
+            entity: sensor.pylontech_h3x_energy_arbitrage_decision
+            attribute: apply_error
+            name: Last apply error

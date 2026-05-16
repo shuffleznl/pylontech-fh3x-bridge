@@ -42,7 +42,7 @@ The H3X integration writes Modbus register `40907` for EMS mode and `40901` for 
 A Lovelace dashboard is provided in:
 
 ```text
-dashboards/force-h3x-energy.yaml
+dashboards/pylontech-h3x-energy.yaml
 ```
 
 It shows dynamic prices, current arbitrage decisions, planned charge/discharge slots, estimated value, battery power, and battery SOC. See [dashboards/README.md](dashboards/README.md) for installation.

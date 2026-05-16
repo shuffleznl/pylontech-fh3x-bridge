@@ -1,6 +1,6 @@
-# Force H3X Energy Dashboard
+# Pylontech H3X Energy Dashboard
 
-`force-h3x-energy.yaml` is a Lovelace dashboard for the optional energy-arbitrage stack.
+`pylontech-h3x-energy.yaml` is a Lovelace dashboard for the optional energy-arbitrage stack.
 
 It shows:
 
@@ -21,10 +21,10 @@ The dashboard also includes built-in `history-graph` cards for battery power and
 
 ## Install The YAML Dashboard
 
-Copy `dashboards/force-h3x-energy.yaml` into your Home Assistant config directory, for example:
+Copy `dashboards/pylontech-h3x-energy.yaml` into your Home Assistant config directory, for example:
 
 ```text
-config/dashboards/force-h3x-energy.yaml
+config/dashboards/pylontech-h3x-energy.yaml
 ```
 
 Then add this to `configuration.yaml`:
@@ -33,12 +33,12 @@ Then add this to `configuration.yaml`:
 lovelace:
   mode: storage
   dashboards:
-    force-h3x-energy:
+    pylontech-h3x-energy:
       mode: yaml
-      title: Force H3X Energy
+      title: Pylontech H3X Energy
       icon: mdi:battery-charging-70
       show_in_sidebar: true
-      filename: dashboards/force-h3x-energy.yaml
+      filename: dashboards/pylontech-h3x-energy.yaml
 ```
 
 Restart Home Assistant or reload Lovelace resources after installing `apexcharts-card`.
@@ -49,5 +49,7 @@ The dashboard assumes the default entity IDs created by:
 
 - `pylontech_h3x_bridge`
 - `h3x_energy_arbitrage`
+
+For the arbitrage integration, Home Assistant prefixes entities with the device name by default, for example `sensor.pylontech_h3x_energy_arbitrage_decision` and `sensor.pylontech_h3x_energy_arbitrage_price_plan`.
 
 If Home Assistant adds suffixes such as `_2`, edit the dashboard YAML and replace the entity IDs.
