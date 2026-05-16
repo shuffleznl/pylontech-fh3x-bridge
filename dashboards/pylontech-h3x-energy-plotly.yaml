@@ -1,0 +1,274 @@
+title: Pylontech H3X Energy Plotly
+views:
+  - title: Energy
+    path: pylontech-h3x-energy-plotly
+    icon: mdi:chart-timeline-variant
+    cards:
+      - type: markdown
+        title: Pylontech H3X Energy
+        content: |
+          {% set plan_entity = 'sensor.pylontech_h3x_energy_arbitrage_price_plan' %}
+          {% set decision = states('sensor.pylontech_h3x_energy_arbitrage_decision') %}
+          {% set reason = states('sensor.pylontech_h3x_energy_arbitrage_decision_reason') %}
+          {% set price = states('sensor.pylontech_h3x_energy_arbitrage_current_price') %}
+          {% set value = states('sensor.pylontech_h3x_energy_arbitrage_estimated_savings') %}
+          {% set currency = state_attr(plan_entity, 'currency') or 'EUR' %}
+
+          **Decision:** {{ decision if decision not in ['unknown', 'unavailable', 'none', 'None', ''] else 'waiting for optimizer data' }}
+
+          **Reason:** {{ reason if reason not in ['unknown', 'unavailable', 'none', 'None', ''] else 'not available yet' }}
+
+          **Current price:** {% if price not in ['unknown', 'unavailable', 'none', 'None', ''] %}{{ price }} {{ currency }}/kWh{% else %}waiting for Nord Pool price data{% endif %}
+
+          **Estimated value:** {% if value not in ['unknown', 'unavailable', 'none', 'None', ''] %}{{ value }} {{ currency }} over the active optimization horizon.{% else %}waiting for price, SOC, and capacity data{% endif %}
+
+      - type: grid
+        title: Live optimizer state
+        columns: 4
+        square: false
+        cards:
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_decision
+            name: Decision
+            icon: mdi:state-machine
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_current_price
+            name: Current price
+            icon: mdi:cash-clock
+          - type: tile
+            entity: sensor.pylontech_h3x_energy_arbitrage_target_power
+            name: Target power
+            icon: mdi:transmission-tower-export
+          - type: tile
+            entity: sensor.pylontech_h3x_bridge_battery_soc
+            name: Battery SOC
+            icon: mdi:battery
+
+      - type: entities
+        title: Arbitrage controls
+        show_header_toggle: false
+        entities:
+          - entity: select.pylontech_h3x_energy_arbitrage_strategy_profile
+            name: Strategy profile
+          - entity: select.pylontech_h3x_energy_arbitrage_end_of_horizon_soc
+            name: End-of-horizon SOC
+          - entity: select.pylontech_h3x_energy_arbitrage_discharge_power_mode
+            name: Discharge power mode
+          - entity: switch.pylontech_h3x_energy_arbitrage_periodic_full_charge
+            name: Periodic full charge
+          - entity: number.pylontech_h3x_energy_arbitrage_discharge_spread_price_tolerance
+            name: Discharge spread tolerance
+          - entity: number.pylontech_h3x_energy_arbitrage_discharge_spread_maximum_window
+            name: Discharge spread window
+
+      - type: custom:plotly-graph
+        title: Price, dispatch, battery power, and SOC
+        hours_to_show: 48h
+        refresh_interval: 60
+        autorange_after_scroll: true
+        config:
+          scrollZoom: true
+          displaylogo: false
+          responsive: true
+        layout:
+          height: 520
+          hovermode: x unified
+          margin:
+            l: 55
+            r: 82
+            t: 40
+            b: 45
+          legend:
+            orientation: h
+            "y": -0.18
+          xaxis:
+            rangeselector:
+              "y": 1.12
+              buttons:
+                - count: 6
+                  step: hour
+                - count: 12
+                  step: hour
+                - count: 24
+                  step: hour
+                - count: 2
+                  step: day
+          yaxis:
+            title: Price/kWh
+            rangemode: tozero
+          yaxis2:
+            title: kW
+            overlaying: y
+            side: right
+            zeroline: true
+          yaxis3:
+            title: SOC %
+            overlaying: y
+            side: right
+            position: 0.94
+            range:
+              - 0
+              - 100
+        entities:
+          - entity: sensor.pylontech_h3x_energy_arbitrage_price_plan
+            name: Price
+            yaxis: y
+            type: scatter
+            mode: lines
+            line:
+              color: "#1f77b4"
+              width: 2
+              shape: hv
+            x: >-
+              $ex (hass.states['sensor.pylontech_h3x_energy_arbitrage_price_plan']?.attributes?.price_slots || []).flatMap((slot) => [new Date(slot.start), new Date(slot.end)])
+            "y": >-
+              $ex (hass.states['sensor.pylontech_h3x_energy_arbitrage_price_plan']?.attributes?.price_slots || []).flatMap((slot) => [Number(slot.price), Number(slot.price)])
+            hovertemplate: "%{y:.3f}/kWh<extra>Price</extra>"
+          - entity: sensor.pylontech_h3x_energy_arbitrage_price_plan
+            name: Trend
+            yaxis: y
+            type: scatter
+            mode: lines
+            line:
+              color: "#d62728"
+              width: 2
+              shape: spline
+            x: >-
+              $ex (hass.states['sensor.pylontech_h3x_energy_arbitrage_price_plan']?.attributes?.price_trend || []).map((slot) => new Date(slot.start))
+            "y": >-
+              $ex (hass.states['sensor.pylontech_h3x_energy_arbitrage_price_plan']?.attributes?.price_trend || []).map((slot) => Number(slot.trend_price))
+            hovertemplate: "%{y:.3f}/kWh<extra>Trend</extra>"
+          - entity: sensor.pylontech_h3x_energy_arbitrage_price_plan
+            name: Planned dispatch
+            yaxis: y2
+            type: scatter
+            mode: lines
+            fill: tozeroy
+            line:
+              color: "#2ca02c"
+              width: 2
+              shape: hv
+            x: >-
+              $ex (hass.states['sensor.pylontech_h3x_energy_arbitrage_price_plan']?.attributes?.dispatch_plan || []).filter((slot) => slot.action === 'charge' || slot.action === 'discharge').flatMap((slot) => [new Date(slot.start), new Date(slot.end)])
+            "y": >-
+              $ex (hass.states['sensor.pylontech_h3x_energy_arbitrage_price_plan']?.attributes?.dispatch_plan || []).filter((slot) => slot.action === 'charge' || slot.action === 'discharge').flatMap((slot) => { const kw = Number(slot.target_power_w || 0) / 1000; const signed = slot.action === 'charge' ? -kw : kw; return [signed, signed]; })
+            hovertemplate: "%{y:.1f} kW<extra>Dispatch</extra>"
+          - entity: sensor.pylontech_h3x_bridge_battery_power
+            name: Battery power
+            yaxis: y2
+            type: scatter
+            mode: lines
+            line:
+              color: "#ff7f0e"
+              width: 1.5
+            filters:
+              - map_y: parseFloat(y) / 1000
+            hovertemplate: "%{y:.1f} kW<extra>Battery power</extra>"
+          - entity: sensor.pylontech_h3x_bridge_battery_soc
+            name: SOC
+            yaxis: y3
+            type: scatter
+            mode: lines
+            line:
+              color: "#9467bd"
+              width: 2
+            hovertemplate: "%{y:.0f}%<extra>SOC</extra>"
+
+      - type: markdown
+        title: Planned actions
+        content: |
+          {% set plan_entity = 'sensor.pylontech_h3x_energy_arbitrage_price_plan' %}
+          {% set currency = state_attr(plan_entity, 'currency') or 'EUR' %}
+          {% set plan = state_attr(plan_entity, 'dispatch_plan') or [] %}
+          {% set actionable = plan | selectattr('action', 'ne', 'idle') | list %}
+
+          <table>
+            <thead>
+              <tr>
+                <th>Start</th>
+                <th>Action</th>
+                <th>Price</th>
+                <th>Power</th>
+                <th>Energy</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+          {% for slot in actionable[:10] %}
+              <tr>
+                <td>{{ slot.start[5:16] | replace('T', ' ') }}</td>
+                <td>{{ slot.action | title }}</td>
+                <td>{{ ((slot.price | default(0)) | float(0)) | round(3) }} {{ currency }}/kWh</td>
+                <td>{{ ((slot.target_power_w | default(0)) | float(0) / 1000) | round(1) }} kW</td>
+                <td>{{ ((slot.energy_kwh | default(0)) | float(0)) | round(2) }} kWh</td>
+                <td>{{ ((slot.value | default(0)) | float(0)) | round(2) }} {{ currency }}</td>
+              </tr>
+          {% endfor %}
+            </tbody>
+          </table>
+          {% if actionable | count == 0 %}
+          No charge or discharge actions are currently planned.
+          {% else %}
+          The table intentionally hides idle diagnostic rows. Planned values can move when prices, SOC, load, or grid limits update.
+          {% endif %}
+
+      - type: custom:plotly-graph
+        title: Battery SOC detail
+        hours_to_show: 7d
+        refresh_interval: 120
+        autorange_after_scroll: true
+        config:
+          scrollZoom: true
+          displaylogo: false
+          responsive: true
+        layout:
+          height: 320
+          hovermode: x unified
+          margin:
+            l: 50
+            r: 20
+            t: 40
+            b: 45
+          yaxis:
+            title: SOC %
+            range:
+              - 0
+              - 100
+          xaxis:
+            rangeselector:
+              "y": 1.15
+              buttons:
+                - count: 1
+                  step: day
+                - count: 3
+                  step: day
+                - count: 7
+                  step: day
+        entities:
+          - entity: sensor.pylontech_h3x_bridge_battery_soc
+            name: SOC
+            type: scatter
+            mode: lines
+            line:
+              color: "#9467bd"
+              width: 2
+            statistic: mean
+            period: 5minute
+            hovertemplate: "%{y:.0f}%<extra>SOC</extra>"
+
+      - type: entities
+        title: Diagnostics
+        show_header_toggle: false
+        entities:
+          - entity: sensor.pylontech_h3x_energy_arbitrage_decision_reason
+            name: Decision reason
+          - entity: sensor.pylontech_h3x_energy_arbitrage_next_charge_slot
+            name: Next charge slot
+          - entity: sensor.pylontech_h3x_energy_arbitrage_next_discharge_slot
+            name: Next discharge slot
+          - entity: sensor.pylontech_h3x_energy_arbitrage_periodic_full_charge_slot
+            name: Periodic full-charge slot
+          - entity: sensor.pylontech_h3x_energy_arbitrage_price_resolution
+            name: Price resolution
+          - entity: sensor.pylontech_h3x_energy_arbitrage_price_slots_available
+            name: Available slots

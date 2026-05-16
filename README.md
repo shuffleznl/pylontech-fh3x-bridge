@@ -43,11 +43,12 @@ A Lovelace dashboard is provided in:
 
 ```text
 dashboards/pylontech-h3x-energy.yaml
+dashboards/pylontech-h3x-energy-plotly.yaml
 ```
 
-It shows dynamic prices, current arbitrage decisions, planned charge/discharge slots, estimated value, battery power, and battery SOC. See [dashboards/README.md](dashboards/README.md) for installation.
+They show dynamic prices, current arbitrage decisions, planned charge/discharge slots, estimated value, battery power, and battery SOC. The default dashboard uses ApexCharts; the optional Plotly dashboard provides a denser unified chart view with zoom, range selector buttons, and unified hover. See [dashboards/README.md](dashboards/README.md) for installation.
 
-The price and decision cards require the optional `h3x-energy-arbitrage` HACS integration. The rich charts use `apexcharts-card` from HACS; built-in history cards are included for battery power and SOC.
+The price and decision cards require the optional `h3x-energy-arbitrage` HACS integration. The rich charts use `apexcharts-card` or `Plotly Graph Card` from HACS, depending on the dashboard.
 
 ## Manual Installation
 
